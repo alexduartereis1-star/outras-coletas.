@@ -1,5 +1,5 @@
 const CACHE_NAME = "outras-coletas-v2";
-const CORE_ASSETS = ["./", "./index.html", "./pdf-coleta.js", "./manifest.json", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png"];
+const CORE_ASSETS = ["./", "./index.html", "./pdf-coleta.js", "./manifest.json", "./icon-144.png"];
 // Bibliotecas externas: guardadas para o app abrir (e escanear/gerar PDF) sem internet depois do primeiro uso
 const CDN_ASSETS = [
   "https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js",

@@ -1,0 +1,21 @@
+{
+  "name": "Outras Coletas - Hiper Carrefour",
+  "short_name": "Outras Coletas",
+  "description": "Bipe os produtos, informe a quantidade e gere a Pr\u00e9 Contagem em PDF e Excel",
+  "id": "./index.html",
+  "lang": "pt-BR",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#2e5daa",
+  "theme_color": "#0088b0",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

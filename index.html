@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Outras Coletas — Hiper Carrefour</title>
+<link rel="icon" href="icon-144.png">
+<link rel="apple-touch-icon" href="icon-144.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Outras Coletas">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0088b0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal:#0088b0; --teal-dark:#006786; --teal-light:#e9f8ff; --pink:#aa0b56;
+    --bg:#f3f2f2; --card:#ffffff; --text:#1c1c1c; --muted:#767c82; --danger:#aa0b56;
+    --radius:8px;
+    --font-display:'Source Serif 4', Georgia, serif;
+    --font-body:'Source Serif 4', Georgia, serif;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--font-body); -webkit-font-smoothing:antialiased; }
+  #app-frame{ width:100%; max-width:640px; margin:0 auto; min-height:100dvh; background:var(--bg); position:relative; display:flex; flex-direction:column; }
+  header.app-header{ padding:20px 20px 8px; display:flex; align-items:center; gap:12px; }
+  .brand-mark{ width:36px; height:36px; border-radius:50%; overflow:hidden; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:#003876; color:#fff; font-weight:700; }
+  .brand-mark img{ width:100%; height:100%; object-fit:cover; }
+  .brand-text .eyebrow{ font-size:12px; letter-spacing:.08em; color:var(--teal); font-weight:700; text-transform:uppercase; }
+  .brand-text h1{ font-family:var(--font-display); font-size:26px; margin:2px 0 0; }
+
+  #app-splash{ position:fixed; inset:0; z-index:999; background:#2e5daa; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; transition:opacity .5s ease, visibility .5s ease; }
+  #app-splash.hide{ opacity:0; visibility:hidden; pointer-events:none; }
+  #app-splash .splash-mark{ width:104px; height:104px; border-radius:26px; overflow:hidden; box-shadow:0 12px 30px rgba(0,0,0,.35); animation:splashPop .6s cubic-bezier(.2,1.4,.4,1) both; }
+  #app-splash .splash-mark img{ width:100%; height:100%; object-fit:cover; display:block; }
+  #app-splash h1{ font-family:'Source Serif 4', Georgia, serif; color:#fff; font-size:28px; margin:0; letter-spacing:.01em; animation:splashFade .6s ease .15s both; }
+  #app-splash .splash-sub{ color:#c9d9f2; font-size:12px; letter-spacing:.28em; text-transform:uppercase; font-weight:700; animation:splashFade .6s ease .25s both; }
+  @keyframes splashPop{ 0%{ transform:scale(.7); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
+  @keyframes splashFade{ 0%{ opacity:0; transform:translateY(6px); } 100%{ opacity:1; transform:translateY(0); } }
+
+  main{ padding:0 20px; flex:1; }
+
+  .ident{ background:var(--card); border-radius:var(--radius); padding:12px 16px; margin-top:8px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .ident .line1{ font-size:14px; font-weight:700; }
+  .ident .line2{ font-size:12px; color:var(--muted); margin-top:2px; }
+
+  .scan-btn{ width:100%; margin-top:14px; background:var(--teal); color:#fff; border:none; border-radius:var(--radius); padding:34px 20px; display:flex; flex-direction:column; align-items:center; gap:10px; cursor:pointer; font-family:var(--font-body); }
+  .scan-btn:active{ background:var(--teal-dark); }
+  .scan-btn svg{ width:34px; height:34px; }
+  .scan-btn span{ font-size:17px; font-weight:700; }
+
+  .cart-head{ display:flex; align-items:center; justify-content:space-between; margin:26px 0 12px; }
+  .cart-head h2{ font-size:17px; margin:0; }
+  .cart-head .meta{ display:flex; align-items:center; gap:10px; }
+  .badge{ background:#e3edee; color:var(--teal-dark); font-size:12px; font-weight:700; padding:4px 10px; border-radius:999px; }
+  .link-btn{ background:none; border:none; color:var(--teal); font-size:13px; font-weight:600; cursor:pointer; padding:0; font-family:var(--font-body); }
+  #empty-state{ color:var(--muted); font-size:14px; padding:28px 4px; text-align:center; }
+
+  .item{ background:var(--card); border-radius:var(--radius); padding:14px 20px; margin-bottom:10px; display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+  .item-info{ min-width:0; }
+  .item-info h3{ font-size:15px; margin:0 0 3px; line-height:1.3; }
+  .item-info .code{ font-size:11px; color:#a9adb2; }
+  .item-info .tag{ font-size:11px; color:var(--danger); font-weight:700; margin-top:2px; }
+  .item-right{ display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex-shrink:0; }
+  .del{ background:none; border:none; color:var(--danger); cursor:pointer; padding:2px; }
+  .del svg{ width:17px; height:17px; }
+  .qty-chip{ border:1px solid #dfe2e4; background:#f6f7f8; border-radius:8px; padding:6px 14px; font-size:17px; font-weight:700; min-width:58px; text-align:center; cursor:pointer; font-family:var(--font-body); color:var(--text); }
+
+  footer.summary{ position:sticky; bottom:0; background:var(--card); border-top:1px solid #e3e5e7; padding:14px 40px calc(14px + env(safe-area-inset-bottom)); }
+  .summary-row{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .summary-row .label{ color:var(--muted); font-size:13px; }
+  .summary-row .total{ font-size:20px; font-weight:700; }
+  .go-row{ display:flex; gap:10px; }
+  .go-btn{ flex:1; background:var(--teal); color:#fff; border:none; border-radius:12px; padding:14px; font-size:15px; font-weight:700; cursor:pointer; font-family:var(--font-body); }
+  .go-btn.outline{ background:#fff; color:var(--teal-dark); border:2px solid var(--teal); }
+  .go-btn:disabled{ background:#c7cdd0; color:#fff; border-color:#c7cdd0; cursor:not-allowed; }
+
+  /* Scanner (mesmo do Checkout Rápido) */
+  @keyframes scanline{ 0%{ transform:translateY(0); opacity:.9; } 50%{ opacity:.5; } 100%{ transform:translateY(114px); opacity:.9; } }
+  #scanner-wrap{ position:relative; width:100%; height:280px; margin-top:16px; border-radius:var(--radius); overflow:hidden; background:#20242a; }
+  #quagga-container{ position:absolute; inset:0; }
+  #quagga-container video, #quagga-container canvas{ position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; }
+  .scan-frame{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:220px; height:120px; box-shadow:0 0 0 999px rgba(0,0,0,.45); border-radius:6px; }
+  .corner{ position:absolute; width:26px; height:26px; border-color:var(--teal-light); border-style:solid; border-width:0; }
+  .corner.tl{ top:0; left:0; border-top-width:3px; border-left-width:3px; border-radius:6px 0 0 0; }
+  .corner.tr{ top:0; right:0; border-top-width:3px; border-right-width:3px; border-radius:0 6px 0 0; }
+  .corner.bl{ bottom:0; left:0; border-bottom-width:3px; border-left-width:3px; border-radius:0 0 0 6px; }
+  .corner.br{ bottom:0; right:0; border-bottom-width:3px; border-right-width:3px; border-radius:0 0 6px 0; }
+  .scanline{ position:absolute; left:0; right:0; top:0; height:2px; background:#ff1a1a; box-shadow:0 0 8px #ff1a1a, 0 0 16px rgba(255,26,26,.6); animation:scanline 1.6s ease-in-out infinite; }
+  .scan-hint{ text-align:center; font-size:13px; color:var(--muted); padding:10px 0 0; }
+  .manual-entry{ display:flex; gap:8px; padding:10px 0 0; }
+  .manual-entry input{ flex:1; padding:12px; border-radius:10px; border:1px solid #dfe2e4; font-size:15px; font-family:var(--font-body); }
+  .manual-entry button{ background:var(--teal); color:#fff; border:none; border-radius:10px; padding:0 16px; font-weight:700; font-family:var(--font-body); }
+  .stop-scan-btn{ position:absolute; top:10px; right:10px; z-index:5; background:rgba(0,0,0,.55); color:#fff; border:none; border-radius:20px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; }
+
+  /* Modais */
+  .modal{ position:fixed; inset:0; background:rgba(10,14,16,.92); display:none; flex-direction:column; align-items:center; justify-content:center; padding:20px; z-index:50; color:#fff; }
+  .modal.open{ display:flex; }
+  .sheet{ background:#fff; color:var(--text); border-radius:14px; padding:22px 20px; width:100%; max-width:420px; display:flex; flex-direction:column; gap:10px; max-height:92dvh; overflow:auto; }
+  .sheet h2{ font-size:18px; margin:0; font-family:var(--font-display); }
+  .sheet .sub{ font-size:12px; color:var(--muted); }
+  .sheet .prod{ font-size:16px; font-weight:600; line-height:1.3; }
+  .sheet .ean{ font-size:12px; color:var(--muted); }
+  .sheet .warn{ font-size:12px; color:var(--danger); font-weight:700; }
+  .sheet label{ font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.04em; text-transform:uppercase; margin-top:4px; }
+  .sheet input[type=text], .sheet input[type=number], .sheet input[type=tel]{ width:100%; padding:12px; border-radius:10px; border:1px solid #cfd4d7; font-size:16px; font-family:var(--font-body); }
+  .sheet input.qty-input{ font-size:34px; text-align:center; font-weight:700; padding:14px; }
+  .sheet .btn-row{ display:flex; gap:10px; margin-top:6px; }
+  .sheet .btn-row button{ flex:1; padding:14px; border-radius:12px; font-size:15px; font-weight:700; border:2px solid var(--teal); background:var(--teal); color:#fff; cursor:pointer; font-family:var(--font-body); }
+  .sheet .btn-row button.ghost{ background:#fff; color:var(--teal-dark); }
+  .sheet .btn-row button.danger{ background:#fff; color:var(--danger); border-color:var(--danger); }
+
+  .toast{ position:fixed; left:50%; bottom:130px; transform:translateX(-50%); background:#1a1a1a; color:#fff; padding:10px 16px; border-radius:10px; font-size:13px; opacity:0; pointer-events:none; transition:opacity .2s; z-index:80; max-width:90%; text-align:center; }
+  .toast.show{ opacity:1; }
+</style>
+</head>
+<body>
+<div id="app-splash">
+  <div class="splash-mark"><img src="icon-144.png" alt="Carrefour"></div>
+  <h1>Outras Coletas</h1>
+  <div class="splash-sub">Hiper Carrefour</div>
+</div>
+
+<div id="app-frame">
+<header class="app-header">
+  <div class="brand-mark"><img src="icon-144.png" alt="Carrefour"></div>
+  <div class="brand-text">
+    <div class="eyebrow">Hiper Carrefour</div>
+    <h1>Outras coletas</h1>
+  </div>
+</header>
+
+<main>
+  <div class="ident" id="ident-card">
+    <div>
+      <div class="line1" id="ident-l1">—</div>
+      <div class="line2" id="ident-l2">—</div>
+    </div>
+    <button class="link-btn" id="edit-cfg">Editar</button>
+  </div>
+
+  <button class="scan-btn" id="open-scanner">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3"/></svg>
+    <span>Escanear produto</span>
+  </button>
+
+  <div id="scanner-wrap" style="display:none;">
+    <div id="quagga-container"></div>
+    <div class="scan-frame">
+      <div class="corner tl"></div><div class="corner tr"></div>
+      <div class="corner bl"></div><div class="corner br"></div>
+      <div class="scanline"></div>
+    </div>
+    <div id="camera-error" style="display:none; position:absolute; inset:0; align-items:center; justify-content:center; padding:24px; text-align:center; color:#ff8a8a; font-size:14px;"></div>
+    <button class="stop-scan-btn" id="torch-toggle" style="right:96px; display:none;">🔦</button>
+    <button class="stop-scan-btn" id="zoom-out" style="right:186px; display:none; padding:8px 14px;">－</button>
+    <button class="stop-scan-btn" id="zoom-in" style="right:146px; display:none; padding:8px 14px;">＋</button>
+    <button class="stop-scan-btn" id="close-scanner">✕ Parar</button>
+  </div>
+  <div class="scan-hint" id="scan-hint" style="display:none;">Aponte para o código de barras. Se não pegar, use o 🔦 ou o ＋ de zoom, ou digite o código abaixo.</div>
+
+  <div class="manual-entry" id="manual-entry-block" style="display:none;">
+    <input type="text" id="manual-code" placeholder="Código de barras" inputmode="numeric">
+    <button id="manual-add">Adicionar</button>
+  </div>
+
+  <div class="cart-head">
+    <h2>Itens coletados</h2>
+    <div class="meta">
+      <span class="badge" id="item-count">0 itens</span>
+      <button class="link-btn" id="clear-cart">Nova coleta</button>
+    </div>
+  </div>
+
+  <div id="catalog-status" style="font-size:12px; color:var(--muted); margin:8px 0 4px;">Carregando base…</div>
+  <div style="display:flex; gap:16px; margin-bottom:14px;">
+    <button class="link-btn" id="refresh-catalog">↻ Atualizar base</button>
+    <button class="link-btn" id="import-csv">⬆ Importar CSV</button>
+    <input type="file" id="csv-file" accept=".csv,text/csv,text/plain" style="display:none;">
+  </div>
+
+  <div id="empty-state">Nenhum item ainda. Toque em "Escanear produto" para começar.</div>
+  <div id="cart-list"></div>
+</main>
+
+<footer class="summary">
+  <div class="summary-row">
+    <span class="label">Total de unidades</span>
+    <span class="total" id="total-units">0</span>
+  </div>
+  <div class="go-row">
+    <button class="go-btn" id="go-pdf" disabled>Gerar PDF</button>
+    <button class="go-btn outline" id="go-xlsx" disabled>Gerar Excel</button>
+  </div>
+</footer>
+</div>
+
+<!-- Modal: quantidade -->
+<div class="modal" id="qty-modal">
+  <div class="sheet">
+    <div class="sub" id="qty-sub">Produto lido</div>
+    <div class="prod" id="qty-prod">—</div>
+    <div class="ean" id="qty-ean">—</div>
+    <div id="qty-desc-wrap" style="display:none;">
+      <div class="warn">Produto não encontrado na base — informe a descrição:</div>
+      <input type="text" id="qty-desc-input" placeholder="Descrição do produto" autocomplete="off">
+    </div>
+    <div class="warn" id="qty-exists" style="display:none;"></div>
+    <label for="qty-input">Quantidade em unidades</label>
+    <input type="tel" inputmode="numeric" pattern="[0-9]*" class="qty-input" id="qty-input" placeholder="0" autocomplete="off">
+    <div class="btn-row" id="qty-btns-new">
+      <button class="ghost" id="qty-cancel">Cancelar</button>
+      <button id="qty-save">Gravar</button>
+    </div>
+    <div class="btn-row" id="qty-btns-exists" style="display:none;">
+      <button class="ghost" id="qty-cancel2">Cancelar</button>
+      <button class="ghost" id="qty-replace">Substituir</button>
+      <button id="qty-sum">Somar</button>
+    </div>
+    <div class="btn-row" id="qty-btns-edit" style="display:none;">
+      <button class="danger" id="qty-delete">Excluir</button>
+      <button class="ghost" id="qty-cancel3">Cancelar</button>
+      <button id="qty-save-edit">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: identificação da coleta -->
+<div class="modal" id="cfg-modal">
+  <div class="sheet">
+    <h2>Identificação da coleta</h2>
+    <div class="sub">Esses dados saem no cabeçalho do PDF e no Excel. Ficam salvos só neste celular.</div>
+    <label for="cfg-loja">Loja</label>
+    <input type="text" id="cfg-loja" placeholder="Ex.: 617" inputmode="numeric" autocomplete="off">
+    <label for="cfg-mat">Matrícula do responsável</label>
+    <input type="text" id="cfg-mat" placeholder="Ex.: brrro095" autocomplete="off" autocapitalize="none">
+    <label for="cfg-nome">Nome completo</label>
+    <input type="text" id="cfg-nome" placeholder="Ex.: ROSIMEIRE DE LIMA RANGEL RAMOS" autocomplete="off" autocapitalize="characters">
+    <label for="cfg-ident">Identificador informado no coletor</label>
+    <input type="text" id="cfg-ident" placeholder="Ex.: D001" autocomplete="off" autocapitalize="characters">
+    <div class="btn-row">
+      <button class="ghost" id="cfg-cancel" style="display:none;">Cancelar</button>
+      <button id="cfg-save">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<script src="pdf-coleta.js" defer></script>
+<script>
+/* ============================================================
+   CONFIGURAÇÃO — cole aqui a URL do Apps Script publicado
+   (veja apps-script.gs e o LEIAME.md)
+   ============================================================ */
+const PRODUCTS_ENDPOINT = "";
+
+/* Logo do cabeçalho do PDF (extraído do modelo ETIQUETA_UNICO.pdf) */
+const LOGO_URL = "logo-pdf.png";
+let logoDataUrl = null;
+async function carregarLogo(){
+  if (logoDataUrl) return logoDataUrl;
+  try {
+    const resp = await fetch(LOGO_URL);
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    if (!/^image\/png/.test(blob.type)) return null;
+    logoDataUrl = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(blob); });
+  } catch (e) { console.error("Logo:", e); }
+  return logoDataUrl;
+}
+
+const STORAGE_KEY = "outras_coletas_v1";          // coleta + identificação (somente neste aparelho)
+const CATALOG_TIME_KEY = "outras_coletas_base_time_v1";
+const CATALOG_AUTO_REFRESH_MS = 3 * 60 * 60 * 1000;
+const IDB_NOME = "outras_coletas_db", IDB_STORE = "base", IDB_VERSAO = 1, IDB_CHAVE = "base_atual";
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+/* ---------- IndexedDB (80 mil itens não cabem no localStorage) ---------- */
+function abrirIDB(){
+  return new Promise((resolve, reject) => {
+    if (!("indexedDB" in window)) { reject(new Error("IndexedDB não suportado")); return; }
+    const req = indexedDB.open(IDB_NOME, IDB_VERSAO);
+    req.onupgradeneeded = () => { const db = req.result; if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function salvarBaseIDB(data){
+  const db = await abrirIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).put(data, IDB_CHAVE);
+    tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error);
+  });
+}
+async function carregarBaseIDB(){
+  const db = await abrirIDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(IDB_STORE, "readonly").objectStore(IDB_STORE).get(IDB_CHAVE);
+    req.onsuccess = () => resolve(req.result || null); req.onerror = () => reject(req.error);
+  });
+}
+
+/* ---------- Estado ---------- */
+let state = carregarEstado();   // { cfg:{loja,matricula,nome,identificador}, items:[{ean,desc,qtd,id,ts,naoCadastrado}] }
+let baseMap = new Map();        // chave normalizada -> { ean, desc }
+let baseTotal = 0;
+
+function carregarEstado(){
+  try {
+    const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    if (s && s.cfg && Array.isArray(s.items)) return s;
+  } catch (e) {}
+  return { cfg: { loja:"", matricula:"", nome:"", identificador:"" }, items: [] };
+}
+function salvarEstado(){ try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { showToast("⚠ Não foi possível salvar neste aparelho"); } }
+
+/* ---------- Bip ---------- */
+let audioCtx = null;
+function garantirAudioCtx(){ if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
+function destravarAudio(){
+  try {
+    const ctx = garantirAudioCtx(); if (ctx.state === "suspended") ctx.resume();
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    gain.gain.value = 0.00001; osc.connect(gain).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.01);
+  } catch (e) { console.error("Áudio:", e); }
+}
+function playBeep(success){
+  try {
+    const ctx = garantirAudioCtx(); if (ctx.state === "suspended") ctx.resume();
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = "square"; osc.frequency.value = success ? 1700 : 320;
+    const dur = success ? 0.09 : 0.22;
+    gain.gain.setValueAtTime(0.7, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    osc.connect(gain).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + dur);
+  } catch (e) { console.error("Bip:", e); }
+}
+
+/* ---------- Base de produtos ---------- */
+function chave(code){ return String(code == null ? "" : code).trim().replace(/\D/g, "").replace(/^0+/, ""); }
+
+function indexarBase(pares){
+  const m = new Map();
+  let suspeitos = 0;
+  for (let i = 0; i < pares.length; i++) {
+    const ean = String(pares[i][0] == null ? "" : pares[i][0]).trim();
+    const desc = String(pares[i][1] == null ? "" : pares[i][1]).trim();
+    if (!ean || !desc) continue;
+    if (ean.length >= 11 && /0000$/.test(ean)) suspeitos++;   // típico de notação científica do Excel
+    const k = chave(ean);
+    if (k && !m.has(k)) m.set(k, { ean, desc });
+  }
+  baseMap = m; baseTotal = m.size;
+  return { suspeitos, total: pares.length };
+}
+
+function textoStatus(info, origem){
+  const el = $("catalog-status");
+  let t = "✓ " + baseTotal.toLocaleString("pt-BR") + " produtos (" + origem + ")";
+  el.style.color = "var(--teal-dark)";
+  if (info && info.suspeitos > 0 && info.suspeitos / Math.max(info.total, 1) > 0.02) {
+    t += " — ⚠ " + info.suspeitos.toLocaleString("pt-BR") + " códigos parecem arredondados pelo Excel (ex.: 7891100000000). Formate a coluna COD_EAN como Texto e recarregue a base.";
+    el.style.color = "var(--danger)";
+  }
+  el.textContent = t;
+}
+
+function catalogIsFresh(){
+  const t = Number(localStorage.getItem(CATALOG_TIME_KEY) || 0);
+  return t > 0 && (Date.now() - t) < CATALOG_AUTO_REFRESH_MS;
+}
+
+async function loadCachedBase(){
+  try {
+    const cached = await carregarBaseIDB();
+    if (cached && Array.isArray(cached) && cached.length) {
+      const info = indexarBase(cached);
+      textoStatus(info, "salvos neste aparelho");
+      return true;
+    }
+  } catch (e) { console.error("Base salva:", e); }
+  $("catalog-status").style.color = "var(--muted)";
+  $("catalog-status").textContent = PRODUCTS_ENDPOINT ? "Buscando base de produtos…" : "Base não conectada — use “Importar CSV” ou configure o endpoint.";
+  return false;
+}
+
+async function loadBase(){
+  const st = $("catalog-status");
+  if (!PRODUCTS_ENDPOINT) return;
+  const tinhaBase = baseTotal > 0;
+  try {
+    const res = await fetch(PRODUCTS_ENDPOINT, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch (e) { throw new Error("A resposta não é JSON (página de login/erro do Google?)"); }
+    const pares = Array.isArray(data) ? data : data.items;
+    if (!Array.isArray(pares)) throw new Error("Resposta sem lista de produtos");
+    const info = indexarBase(pares);
+    let salvou = true;
+    try { await salvarBaseIDB(pares); localStorage.setItem(CATALOG_TIME_KEY, String(Date.now())); } catch (e) { salvou = false; console.error(e); }
+    textoStatus(info, salvou ? "da planilha" : "da planilha, sem salvar offline");
+    if (tinhaBase) showToast("Base atualizada");
+  } catch (err) {
+    console.error("Falha ao buscar base:", err);
+    st.style.color = tinhaBase ? "var(--muted)" : "var(--danger)";
+    st.textContent = tinhaBase ? "⚠ Não atualizou agora — usando a base salva (" + baseTotal.toLocaleString("pt-BR") + " produtos)" : "⚠ Falha ao buscar a planilha: " + err.message;
+  }
+}
+
+function importarCSV(file){
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const linhas = String(reader.result).split(/\r?\n/);
+    const pares = [];
+    for (let i = 0; i < linhas.length; i++) {
+      const l = linhas[i]; if (!l) continue;
+      const pos = l.search(/[,;\t]/);
+      if (pos < 0) continue;
+      const a = l.slice(0, pos).trim().replace(/^"|"$/g, ""), b = l.slice(pos + 1).trim().replace(/^"|"$/g, "");
+      if (i === 0 && /ean|cod/i.test(a) && !/\d{4}/.test(a)) continue;   // cabeçalho
+      pares.push([a, b]);
+    }
+    const info = indexarBase(pares);
+    try { await salvarBaseIDB(pares); localStorage.setItem(CATALOG_TIME_KEY, String(Date.now())); } catch (e) { console.error(e); }
+    textoStatus(info, "importados do CSV");
+    showToast("Base importada");
+  };
+  reader.readAsText(file, "utf-8");
+}
+
+/* Busca o produto: tenta o código como lido, sem zeros à esquerda e, para DUN-14, o EAN-13 do item */
+function dvEAN13(d12){ let s = 0; for (let i = 0; i < 12; i++) s += (+d12[i]) * (i % 2 ? 3 : 1); return (10 - (s % 10)) % 10; }
+function buscarProduto(code){
+  const c = String(code || "").trim().replace(/\D/g, "");
+  if (!c) return null;
+  let r = baseMap.get(chave(c));
+  if (r) return r;
+  if (c.length === 14) {               // DUN-14: indicador + 12 dígitos do EAN + novo DV
+    const base12 = c.slice(1, 13);
+    r = baseMap.get(chave(base12 + dvEAN13(base12)));
+    if (r) return r;
+  }
+  return null;
+}
+
+/* ---------- Coleta ---------- */
+function novoId(){
+  let id;
+  do { id = String(Math.floor(Date.now() / 1000)).slice(-8) + ""; if (state.items.some(i => i.id === id)) id = String(Math.floor(Math.random() * 1e8)).padStart(8, "0"); }
+  while (state.items.some(i => i.id === id));
+  return id;
+}
+function totalUnidades(){ return state.items.reduce((s, i) => s + i.qtd, 0); }
+
+function renderLista(){
+  const list = $("cart-list"), empty = $("empty-state");
+  list.innerHTML = "";
+  empty.style.display = state.items.length ? "none" : "block";
+  state.items.forEach((it, idx) => {
+    const row = document.createElement("div");
+    row.className = "item";
+    row.innerHTML = `
+      <div class="item-info">
+        <h3>${idx + 1}. ${esc(it.desc)}</h3>
+        <div class="code">${esc(it.ean)}</div>
+        ${it.naoCadastrado ? '<div class="tag">não cadastrado na base</div>' : ""}
+      </div>
+      <div class="item-right">
+        <button class="del" data-id="${esc(it.id)}" aria-label="Remover">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+        </button>
+        <button class="qty-chip" data-id="${esc(it.id)}">${it.qtd}</button>
+      </div>`;
+    list.appendChild(row);
+  });
+  const n = state.items.length;
+  $("item-count").textContent = n + (n === 1 ? " item" : " itens");
+  $("total-units").textContent = totalUnidades().toLocaleString("pt-BR");
+  $("go-pdf").disabled = $("go-xlsx").disabled = n === 0;
+  list.querySelectorAll(".qty-chip").forEach(b => b.onclick = () => abrirQtd({ editarId: b.dataset.id }));
+  list.querySelectorAll(".del").forEach(b => b.onclick = () => {
+    const it = state.items.find(i => i.id === b.dataset.id);
+    if (it && confirm("Excluir " + it.desc + "?")) { state.items = state.items.filter(i => i.id !== it.id); salvarEstado(); renderLista(); }
+  });
+}
+
+function renderIdent(){
+  const c = state.cfg;
+  $("ident-l1").textContent = (c.loja ? "Loja " + c.loja : "Loja não informada") + (c.identificador ? " · " + c.identificador : "");
+  $("ident-l2").textContent = (c.matricula || "") + (c.nome ? " - " + c.nome : "") || "Toque em Editar para informar o responsável";
+}
+
+/* ---------- Modal de quantidade ---------- */
+let qtdCtx = null;       // { modo:'novo'|'existe'|'editar', ean, desc, naoCadastrado, id }
+let scanBusy = false;
+
+function abrirQtd(ctx){
+  qtdCtx = ctx;
+  const existente = ctx.editarId ? state.items.find(i => i.id === ctx.editarId) : state.items.find(i => chave(i.ean) === chave(ctx.ean));
+  $("qty-exists").style.display = "none";
+  $("qty-btns-new").style.display = $("qty-btns-exists").style.display = $("qty-btns-edit").style.display = "none";
+  $("qty-desc-wrap").style.display = "none";
+  $("qty-input").value = "";
+
+  if (ctx.editarId) {
+    if (!existente) return;
+    qtdCtx.modo = "editar";
+    $("qty-sub").textContent = "Corrigir quantidade";
+    $("qty-prod").textContent = existente.desc; $("qty-ean").textContent = existente.ean;
+    $("qty-input").value = existente.qtd;
+    $("qty-btns-edit").style.display = "flex";
+  } else if (existente) {
+    qtdCtx.modo = "existe"; qtdCtx.id = existente.id;
+    $("qty-sub").textContent = "Produto lido";
+    $("qty-prod").textContent = existente.desc; $("qty-ean").textContent = existente.ean;
+    $("qty-exists").style.display = "block";
+    $("qty-exists").textContent = "Já coletado: " + existente.qtd + " un. Informe a quantidade e escolha Somar ou Substituir.";
+    $("qty-btns-exists").style.display = "flex";
+  } else {
+    qtdCtx.modo = "novo";
+    $("qty-sub").textContent = "Produto lido";
+    $("qty-prod").textContent = ctx.desc || "Produto não encontrado"; $("qty-ean").textContent = ctx.ean;
+    if (ctx.naoCadastrado) { $("qty-desc-wrap").style.display = "block"; $("qty-desc-input").value = ""; }
+    $("qty-btns-new").style.display = "flex";
+  }
+  $("qty-modal").classList.add("open");
+  setTimeout(() => { const el = (ctx.naoCadastrado && qtdCtx.modo === "novo") ? $("qty-desc-input") : $("qty-input"); el.focus(); if (el === $("qty-input")) el.select(); }, 80);
+}
+
+function fecharQtd(){
+  $("qty-modal").classList.remove("open");
+  qtdCtx = null;
+  setTimeout(() => { scanBusy = false; }, 700);   // evita reler o mesmo código na hora
+}
+
+function lerQtd(){
+  const v = parseInt($("qty-input").value, 10);
+  if (isNaN(v) || v < 0) { showToast("Digite a quantidade"); $("qty-input").focus(); return null; }
+  return v;
+}
+
+function gravar(modo){
+  if (!qtdCtx) return;
+  const q = lerQtd(); if (q === null) return;
+  if (modo === "novo") {
+    let desc = qtdCtx.desc;
+    if (qtdCtx.naoCadastrado) {
+      desc = $("qty-desc-input").value.trim().toUpperCase();
+      if (!desc) { showToast("Informe a descrição do produto"); $("qty-desc-input").focus(); return; }
+    }
+    state.items.push({ ean: qtdCtx.ean, desc, qtd: q, id: novoId(), ts: Date.now(), naoCadastrado: !!qtdCtx.naoCadastrado });
+  } else {
+    const it = state.items.find(i => i.id === (qtdCtx.id || qtdCtx.editarId));
+    if (!it) return;
+    if (modo === "somar") it.qtd += q; else it.qtd = q;   // "substituir" e "editar"
+  }
+  salvarEstado(); renderLista();
+  showToast("Gravado");
+  fecharQtd();
+}
+
+/* ---------- Leitura de um código ---------- */
+function aoLerCodigo(code){
+  if (scanBusy) return;
+  const c = String(code || "").trim();
+  if (!c) return;
+  scanBusy = true;
+  const prod = buscarProduto(c);
+  if (prod) { playBeep(true); abrirQtd({ ean: prod.ean, desc: prod.desc }); }
+  else { playBeep(false); abrirQtd({ ean: c, desc: "", naoCadastrado: true }); }
+}
+
+/* ---------- Scanner: nativo (BarcodeDetector) com Quagga de reserva ---------- */
+let quaggaRunning = false, usingNative = false, nativeStream = null, torchOn = false;
+let nativeLoopId = null, nativeWatchdogId = null, nativeWorked = false, wakeLock = null;
+const NATIVE_TIMEOUT_MS = 3500;
+
+async function pedirWakeLock(){ try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {} }
+function soltarWakeLock(){ try { if (wakeLock) wakeLock.release(); } catch (e) {} wakeLock = null; }
+
+async function openScanner(){
+  $("open-scanner").style.display = "none";
+  $("scanner-wrap").style.display = "block";
+  $("scan-hint").style.display = "block";
+  $("manual-entry-block").style.display = "flex";
+  $("camera-error").style.display = "none";
+  $("quagga-container").innerHTML = "";
+  pedirWakeLock();
+  if ("BarcodeDetector" in window) {
+    try { await startNativeScanner(); return; }
+    catch (err) { console.error("Leitor nativo falhou, usando Quagga:", err); stopNativeScanner(); }
+  }
+  startQuaggaScanner();
+}
+
+async function startNativeScanner(){
+  usingNative = true; nativeWorked = false;
+  const detector = new BarcodeDetector({ formats: ["ean_13","ean_8","upc_a","upc_e","itf","code_128"] });
+  const video = document.createElement("video");
+  video.setAttribute("playsinline", ""); video.muted = true;
+  video.style.width = "100%"; video.style.height = "100%"; video.style.objectFit = "cover";
+  $("quagga-container").appendChild(video);
+
+  nativeStream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "environment", width: { min: 640, ideal: 1280, max: 1920 }, height: { min: 480, ideal: 720, max: 1080 }, advanced: [{ focusMode: "continuous" }] }
+  });
+  video.srcObject = nativeStream;
+  await video.play();
+
+  torchOn = false;
+  const track = nativeStream.getVideoTracks()[0];
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  if (caps.torch) { $("torch-toggle").style.display = "flex"; $("torch-toggle").onclick = () => toggleTorch(track); }
+  else $("torch-toggle").style.display = "none";
+  configurarZoom(track, caps);
+
+  // Só troca para o Quagga se o leitor nativo NUNCA conseguiu ler nada (módulo ausente em alguns Android).
+  nativeWatchdogId = setTimeout(() => {
+    if (usingNative && !nativeWorked) {
+      showToast("Trocando para leitor alternativo…");
+      stopNativeScanner(); startQuaggaScanner();
+    }
+  }, NATIVE_TIMEOUT_MS);
+
+  let lastCode = null, lastTime = 0;
+  const tick = async () => {
+    if (!usingNative) return;
+    if (!scanBusy) {
+      try {
+        const codes = await detector.detect(video);
+        if (codes.length) {
+          nativeWorked = true;
+          if (nativeWatchdogId) { clearTimeout(nativeWatchdogId); nativeWatchdogId = null; }
+          const code = codes[0].rawValue, now = Date.now();
+          if (!(code === lastCode && now - lastTime < 1500)) { lastCode = code; lastTime = now; aoLerCodigo(code); }
+        }
+      } catch (e) { console.error("Detecção:", e); }
+    }
+    if (usingNative) nativeLoopId = requestAnimationFrame(tick);
+  };
+  nativeLoopId = requestAnimationFrame(tick);
+}
+
+function stopNativeScanner(){
+  usingNative = false;
+  if (nativeWatchdogId) { clearTimeout(nativeWatchdogId); nativeWatchdogId = null; }
+  if (nativeLoopId) { cancelAnimationFrame(nativeLoopId); nativeLoopId = null; }
+  if (nativeStream) { nativeStream.getTracks().forEach(t => t.stop()); nativeStream = null; }
+  torchOn = false;
+  $("torch-toggle").style.display = "none"; $("torch-toggle").textContent = "🔦";
+  $("zoom-in").style.display = "none"; $("zoom-out").style.display = "none";
+}
+
+function toggleTorch(track){
+  torchOn = !torchOn;
+  track.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(() => { torchOn = !torchOn; });
+  $("torch-toggle").textContent = torchOn ? "💡" : "🔦";
+}
+
+function configurarZoom(track, caps){
+  if (!caps.zoom) { $("zoom-in").style.display = "none"; $("zoom-out").style.display = "none"; return; }
+  const min = caps.zoom.min, max = caps.zoom.max;
+  const passo = caps.zoom.step && caps.zoom.step > 0 ? caps.zoom.step : (max - min) / 10;
+  let atual = track.getSettings().zoom || min;
+  const aplicar = (v) => { atual = Math.max(min, Math.min(max, v)); track.applyConstraints({ advanced: [{ zoom: atual }] }).catch(() => {}); };
+  $("zoom-in").style.display = "flex"; $("zoom-out").style.display = "flex";
+  $("zoom-in").onclick = () => aplicar(atual + passo);
+  $("zoom-out").onclick = () => aplicar(atual - passo);
+}
+
+let quaggaLast = { code: null, time: 0 };
+function quaggaDetectado(result){
+  const code = result.codeResult.code, now = Date.now();
+  if (scanBusy) return;
+  if (code === quaggaLast.code && now - quaggaLast.time < 1500) return;
+  quaggaLast = { code, time: now };
+  aoLerCodigo(code);
+}
+
+function startQuaggaScanner(){
+  if (typeof Quagga === "undefined") { showToast("Leitor ainda carregando — tente de novo"); return; }
+  Quagga.init({
+    inputStream: { type: "LiveStream", target: $("quagga-container"),
+      constraints: { facingMode: "environment", width: { min: 640, ideal: 1280, max: 1920 }, height: { min: 480, ideal: 720, max: 1080 }, advanced: [{ focusMode: "continuous" }] } },
+    locator: { patchSize: "medium", halfSample: false },
+    numOfWorkers: (navigator.hardwareConcurrency ? Math.min(navigator.hardwareConcurrency, 4) : 2),
+    frequency: 10,
+    decoder: { readers: ["ean_reader","ean_8_reader","upc_reader","upc_e_reader","i2of5_reader","code_128_reader"] },
+    locate: true
+  }, function(err){
+    if (err) {
+      console.error(err);
+      const msg = (err && err.name) ? (err.name + ": " + (err.message || "")) : String(err);
+      $("camera-error").style.display = "flex";
+      $("camera-error").textContent = "⚠ Câmera indisponível — " + msg + " — use a entrada manual abaixo.";
+      return;
+    }
+    Quagga.start(); quaggaRunning = true;
+  });
+  Quagga.offDetected(quaggaDetectado);   // evita handlers duplicados a cada abertura
+  Quagga.onDetected(quaggaDetectado);
+}
+
+function closeScanner(){
+  $("scanner-wrap").style.display = "none";
+  $("open-scanner").style.display = "flex";
+  $("scan-hint").style.display = "none";
+  $("manual-entry-block").style.display = "none";
+  stopNativeScanner();
+  if (quaggaRunning) { try { Quagga.offDetected(quaggaDetectado); Quagga.stop(); } catch (e) {} quaggaRunning = false; }
+  soltarWakeLock();
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && $("scanner-wrap").style.display === "block") pedirWakeLock(); });
+
+/* ---------- Exportação ---------- */
+function nomeArquivo(ext){
+  const c = state.cfg, d = new Date();
+  const dt = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+  const limpa = (s) => String(s || "").replace(/[^A-Za-z0-9_-]/g, "");
+  return ["PreContagem", c.loja ? "Loja" + limpa(c.loja) : "", limpa(c.identificador), dt].filter(Boolean).join("_") + "." + ext;
+}
+
+function exigirCfg(){
+  if (!state.cfg.loja || !state.cfg.matricula || !state.cfg.nome) { showToast("Preencha a identificação da coleta antes de gerar"); abrirCfg(false); return false; }
+  return true;
+}
+
+async function gerarPDF(){
+  if (!state.items.length || !exigirCfg()) return;
+  if (!window.jspdf || !window.OC_PDF) { showToast("Gerador de PDF ainda carregando — tente de novo"); return; }
+  try {
+    const doc = OC_PDF.gerarPDF(window.jspdf.jsPDF, { cfg: state.cfg, items: state.items, logo: await carregarLogo() });
+    doc.save(nomeArquivo("pdf"));
+  } catch (e) { console.error(e); showToast("Erro ao gerar PDF: " + e.message); }
+}
+
+function gerarExcel(){
+  if (!state.items.length || !exigirCfg()) return;
+  if (!window.XLSX) { showToast("Gerador de Excel ainda carregando — tente de novo"); return; }
+  const c = state.cfg;
+  const cab = ["LOJA", "IDENTIFICADOR", "RESPONSÁVEL", "ITEM", "ID", "COD_EAN", "DESCRIÇÃO", "QUANTIDADE", "DATA/HORA", "CADASTRADO NA BASE"];
+  const linhas = state.items.map((it, i) => [
+    c.loja, c.identificador, c.matricula + " - " + c.nome, i + 1, it.id, String(it.ean), it.desc, it.qtd,
+    new Date(it.ts).toLocaleString("pt-BR"), it.naoCadastrado ? "NÃO" : "SIM"
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([cab].concat(linhas));
+  // EAN como texto (senão o Excel arredonda de novo)
+  for (let r = 1; r <= linhas.length; r++) { const cell = ws["F" + (r + 1)]; if (cell) { cell.t = "s"; cell.z = "@"; } }
+  ws["!cols"] = [{wch:7},{wch:14},{wch:34},{wch:6},{wch:10},{wch:16},{wch:46},{wch:11},{wch:19},{wch:12}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Coleta");
+  XLSX.writeFile(wb, nomeArquivo("xlsx"));
+}
+
+/* ---------- Identificação ---------- */
+let cfgObrigatorio = false;
+function abrirCfg(obrigatorio){
+  cfgObrigatorio = !!obrigatorio;
+  $("cfg-loja").value = state.cfg.loja || ""; $("cfg-mat").value = state.cfg.matricula || "";
+  $("cfg-nome").value = state.cfg.nome || ""; $("cfg-ident").value = state.cfg.identificador || "";
+  $("cfg-cancel").style.display = cfgObrigatorio ? "none" : "block";
+  $("cfg-modal").classList.add("open");
+}
+function salvarCfg(){
+  const loja = $("cfg-loja").value.trim(), mat = $("cfg-mat").value.trim(), nome = $("cfg-nome").value.trim().toUpperCase(), id = $("cfg-ident").value.trim().toUpperCase();
+  if (!loja || !mat || !nome || !id) { showToast("Preencha todos os campos"); return; }
+  state.cfg = { loja, matricula: mat, nome, identificador: id };
+  salvarEstado(); renderIdent();
+  $("cfg-modal").classList.remove("open");
+}
+
+/* ---------- Toast ---------- */
+let toastTimer;
+function showToast(msg){ const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2400); }
+
+/* ---------- Eventos ---------- */
+$("open-scanner").onclick = () => { destravarAudio(); openScanner(); };
+$("close-scanner").onclick = closeScanner;
+$("manual-add").onclick = () => { destravarAudio(); const v = $("manual-code").value.trim(); if (v) { aoLerCodigo(v); $("manual-code").value = ""; } };
+$("manual-code").addEventListener("keydown", e => { if (e.key === "Enter") $("manual-add").click(); });
+$("clear-cart").onclick = () => {
+  if (!state.items.length) return;
+  if (confirm("Iniciar uma nova coleta? Os " + state.items.length + " itens atuais serão apagados deste aparelho. Gere o PDF/Excel antes.")) { state.items = []; salvarEstado(); renderLista(); }
+};
+$("refresh-catalog").onclick = () => { if (!PRODUCTS_ENDPOINT) showToast("Endpoint não configurado — use Importar CSV"); else loadBase(); };
+$("import-csv").onclick = () => $("csv-file").click();
+$("csv-file").onchange = (e) => { if (e.target.files[0]) importarCSV(e.target.files[0]); e.target.value = ""; };
+$("go-pdf").onclick = gerarPDF;
+$("go-xlsx").onclick = gerarExcel;
+$("edit-cfg").onclick = () => abrirCfg(false);
+$("cfg-save").onclick = salvarCfg;
+$("cfg-cancel").onclick = () => $("cfg-modal").classList.remove("open");
+$("qty-save").onclick = () => gravar("novo");
+$("qty-sum").onclick = () => gravar("somar");
+$("qty-replace").onclick = () => gravar("substituir");
+$("qty-save-edit").onclick = () => gravar("editar");
+$("qty-delete").onclick = () => {
+  if (!qtdCtx) return;
+  const it = state.items.find(i => i.id === qtdCtx.editarId);
+  if (it && confirm("Excluir " + it.desc + "?")) { state.items = state.items.filter(i => i.id !== it.id); salvarEstado(); renderLista(); fecharQtd(); }
+};
+["qty-cancel", "qty-cancel2", "qty-cancel3"].forEach(id => $(id).onclick = fecharQtd);
+$("qty-input").addEventListener("keydown", e => {
+  if (e.key !== "Enter" || !qtdCtx) return;
+  if (qtdCtx.modo === "novo") gravar("novo"); else if (qtdCtx.modo === "editar") gravar("editar");
+});
+
+/* ---------- Início ---------- */
+setTimeout(() => $("app-splash").classList.add("hide"), 400);
+renderIdent(); renderLista();
+if (!state.cfg.loja) abrirCfg(true);
+(async () => {
+  const tinha = await loadCachedBase();
+  if (!tinha || !catalogIsFresh()) loadBase();
+})();
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
