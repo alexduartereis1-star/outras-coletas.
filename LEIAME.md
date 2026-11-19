@@ -11,3 +11,4 @@ Arquivos: index.html, pdf-coleta.js, sw.js, manifest.json, 3 ícones, apps-scrip
 4. PUBLICAÇÃO: suba esta pasta inteira num projeto Vercel chamado "outras-coletas"
    (link: https://outras-coletas.vercel.app, se o nome estiver livre).
 5. Cada celular guarda a própria coleta (nada é gravado na planilha), então uma loja não interfere em outra.
+OK
