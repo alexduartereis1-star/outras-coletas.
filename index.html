@@ -179,8 +179,6 @@
   <div id="sync-status" style="font-size:12px; color:var(--muted); margin:0 0 6px; display:none;"></div>
   <div style="display:flex; gap:16px; margin-bottom:14px;">
     <button class="link-btn" id="refresh-catalog">↻ Atualizar base</button>
-    <button class="link-btn" id="import-csv">⬆ Importar CSV</button>
-    <input type="file" id="csv-file" accept=".csv,text/csv,text/plain" style="display:none;">
   </div>
 
   <div id="empty-state">Nenhum item ainda. Toque em "Escanear produto" para começar.</div>
@@ -503,7 +501,7 @@ async function loadCachedBase(){
     }
   } catch (e) { console.error("Base salva:", e); }
   $("catalog-status").style.color = "var(--muted)";
-  $("catalog-status").textContent = PRODUCTS_ENDPOINT ? "Buscando base de produtos…" : "Base não conectada — use “Importar CSV” ou configure o endpoint.";
+  $("catalog-status").textContent = PRODUCTS_ENDPOINT ? "Buscando base de produtos…" : "Base não conectada — fale com o responsável pelo app.";
   return false;
 }
 
@@ -913,9 +911,7 @@ $("clear-cart").onclick = () => {
   if (!state.items.length) return;
   if (confirm("Iniciar uma nova coleta? Os " + state.items.length + " itens atuais serão apagados DESTE aparelho (os outros aparelhos da mesma lista não são afetados). Gere o PDF/Excel antes.")) { novaColeta(); }
 };
-$("refresh-catalog").onclick = () => { if (!PRODUCTS_ENDPOINT) showToast("Endpoint não configurado — use Importar CSV"); else loadBase(); };
-$("import-csv").onclick = () => $("csv-file").click();
-$("csv-file").onchange = (e) => { if (e.target.files[0]) importarCSV(e.target.files[0]); e.target.value = ""; };
+$("refresh-catalog").onclick = () => { if (!PRODUCTS_ENDPOINT) showToast("Base não conectada — fale com o responsável pelo app"); else loadBase(); };
 $("go-pdf").onclick = gerarPDF;
 $("go-xlsx").onclick = gerarExcel;
 $("edit-cfg").onclick = () => abrirCfg(false);
