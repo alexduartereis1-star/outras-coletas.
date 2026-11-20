@@ -176,6 +176,7 @@
   </div>
 
   <div id="catalog-status" style="font-size:12px; color:var(--muted); margin:8px 0 4px;">Carregando base…</div>
+  <div id="sync-status" style="font-size:12px; color:var(--muted); margin:0 0 6px; display:none;"></div>
   <div style="display:flex; gap:16px; margin-bottom:14px;">
     <button class="link-btn" id="refresh-catalog">↻ Atualizar base</button>
     <button class="link-btn" id="import-csv">⬆ Importar CSV</button>
@@ -188,7 +189,7 @@
 
 <footer class="summary">
   <div class="summary-row">
-    <span class="label">Total de unidades</span>
+    <span class="label">Total de itens coletados</span>
     <span class="total" id="total-units">0</span>
   </div>
   <div class="go-row">
@@ -323,6 +324,118 @@ function carregarEstado(){
   return { cfg: { loja:"", matricula:"", nome:"", identificador:"" }, items: [] };
 }
 function salvarEstado(){ try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { showToast("⚠ Não foi possível salvar neste aparelho"); } }
+
+
+/* ---------- Sincronização entre aparelhos (mesma Loja + mesmo Identificador = mesma lista) ---------- */
+const SYNC_INTERVALO = 12000;
+let syncBusy = false, syncTimer = null, syncDebounce = null, syncErro = "", syncHora = "";
+
+function rnd(n){ const c = "abcdefghijklmnopqrstuvwxyz0123456789"; let r = ""; for (let i = 0; i < n; i++) r += c[Math.floor(Math.random() * c.length)]; return r; }
+function garantirSync(){
+  if (!state.dev) state.dev = rnd(10);
+  if (!state.out) state.out = {};
+  if (!state.tomb) state.tomb = {};
+  if (!state.sync) state.sync = { chave: "", cursor: 1, fim: 0 };
+  state.items.forEach(it => { if (!it.uid) it.uid = rnd(14); if (!it.upd) it.upd = it.ts || Date.now(); });
+}
+function chaveAtual(){ const c = state.cfg; if (!c.loja || !c.identificador) return ""; return (c.loja + "|" + c.identificador).toUpperCase().replace(/\s+/g, " ").trim(); }
+function opDe(it, del){ return { uid: it.uid, upd: it.upd, del: del ? 1 : 0, ean: it.ean, desc: it.desc, qtd: it.qtd, id: it.id, ts: it.ts, nao: it.naoCadastrado ? 1 : 0 }; }
+function proxUpd(ant){ return Math.max(Date.now(), (ant || 0) + 1); }
+function enfileirar(it){ it.upd = proxUpd(it.upd); state.out[it.uid] = opDe(it, false); salvarEstado(); agendarSync(); }
+function excluirItem(it){
+  const upd = proxUpd(it.upd);
+  state.items = state.items.filter(i => i !== it);
+  state.tomb[it.uid] = upd;
+  state.out[it.uid] = Object.assign(opDe(it, true), { upd });
+  salvarEstado(); renderLista(); agendarSync();
+}
+function novaColeta(){
+  state.items = []; state.out = {}; state.tomb = {};
+  state.sync.fim = Date.now();          // o próximo contato com a planilha pula tudo que já existe na lista
+  salvarEstado(); renderLista(); agendarSync();
+}
+
+function verificarChave(){
+  const k = chaveAtual(); if (!k) return false;
+  if (state.sync.chave !== k) {          // primeira vez, ou mudou Loja/Identificador: sobe o que já está neste aparelho
+    state.sync = { chave: k, cursor: 1, fim: 0 };
+    state.tomb = {}; state.out = {};
+    state.items.forEach(it => { state.out[it.uid] = opDe(it, false); });
+    salvarEstado();
+  }
+  return true;
+}
+
+function aplicarRemotos(rows){
+  let mudou = false;
+  rows.forEach(r => {
+    const uid = String(r[0]), upd = Number(r[1]), del = String(r[2]) === "1";
+    const local = state.items.find(i => i.uid === uid);
+    const pend = state.out[uid];
+    if (pend && pend.upd >= upd) return;
+    if (local && local.upd >= upd) return;
+    if (state.tomb[uid] && state.tomb[uid] >= upd) return;
+    if (del) { if (local) { state.items = state.items.filter(i => i !== local); mudou = true; } state.tomb[uid] = upd; return; }
+    const d = { ean: String(r[3]), desc: String(r[4]), qtd: Number(r[5]) || 0, id: String(r[6]), ts: Number(r[7]) || upd, naoCadastrado: String(r[8]) === "1", uid: uid, upd: upd };
+    if (local) Object.assign(local, d); else state.items.push(d);
+    mudou = true;
+  });
+  if (mudou) state.items.sort((a, b) => (a.ts - b.ts) || (a.uid < b.uid ? -1 : 1));
+  return mudou;
+}
+
+function textoSync(){
+  const el = $("sync-status");
+  if (!PRODUCTS_ENDPOINT || !chaveAtual()) { el.style.display = "none"; return; }
+  el.style.display = "block";
+  const pend = Object.keys(state.out || {}).length;
+  if (syncBusy) { el.style.color = "var(--muted)"; el.textContent = "☁ Sincronizando…"; return; }
+  if (syncErro) { el.style.color = "var(--danger)"; el.textContent = "⚠ Sem sincronizar (" + syncErro + ")" + (pend ? " — " + pend + " pendente(s), guardados neste aparelho" : ""); return; }
+  if (pend) { el.style.color = "var(--muted)"; el.textContent = "⏳ " + pend + " gravação(ões) pendente(s)"; return; }
+  el.style.color = "var(--muted)";
+  el.textContent = "☁ Lista compartilhada entre aparelhos" + (syncHora ? " · sincronizado às " + syncHora : "");
+}
+
+async function sincronizar(){
+  if (syncBusy || !PRODUCTS_ENDPOINT) return;
+  if (!verificarChave()) { textoSync(); return; }
+  if (navigator.onLine === false) { syncErro = "sem internet"; textoSync(); return; }
+  syncBusy = true; textoSync();
+  const enviados = Object.values(state.out).slice(0, 400);
+  const body = { k: state.sync.chave, dev: state.dev, cursor: state.sync.cursor, fim: state.sync.fim || 0, ops: enviados, quem: state.cfg.matricula };
+  const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 40000);
+  let mais = false;
+  try {
+    const res = await fetch(PRODUCTS_ENDPOINT, { method: "POST", body: JSON.stringify(body), headers: { "Content-Type": "text/plain;charset=utf-8" }, signal: ctl.signal });
+    let data; const txt = await res.text();
+    try { data = JSON.parse(txt); } catch (e) { throw new Error("o script ainda não foi atualizado"); }
+    if (!data || !data.ok) throw new Error((data && data.erro) || "resposta inválida");
+    if (state.sync.chave === body.k) {
+      enviados.forEach(op => { const a = state.out[op.uid]; if (a && a.upd === op.upd && a.del === op.del) delete state.out[op.uid]; });
+      if (body.fim && state.sync.fim === body.fim) state.sync.fim = 0;
+      const mudou = aplicarRemotos(data.rows || []);
+      state.sync.cursor = data.cursor;
+      salvarEstado();
+      if (mudou) renderLista();
+      mais = !!data.more || Object.keys(state.out).length > 0 && enviados.length >= 400;
+    }
+    syncErro = ""; const d = new Date(); syncHora = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  } catch (err) {
+    syncErro = err.name === "AbortError" ? "demorou demais" : (err.message || "falha de rede");
+    console.error("Sync:", err);
+  } finally { clearTimeout(to); syncBusy = false; textoSync(); }
+  if (mais) setTimeout(sincronizar, 300);
+}
+function agendarSync(){ textoSync(); clearTimeout(syncDebounce); syncDebounce = setTimeout(sincronizar, 1200); }
+function iniciarSync(){
+  garantirSync(); salvarEstado();
+  if (!PRODUCTS_ENDPOINT) return;
+  clearInterval(syncTimer);
+  syncTimer = setInterval(() => { if (document.visibilityState === "visible") sincronizar(); }, SYNC_INTERVALO);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") sincronizar(); });
+  window.addEventListener("online", () => { syncErro = ""; sincronizar(); });
+  sincronizar();
+}
 
 /* ---------- Bip ---------- */
 let audioCtx = null;
@@ -477,21 +590,21 @@ function renderLista(){
         ${it.naoCadastrado ? '<div class="tag">não cadastrado na base</div>' : ""}
       </div>
       <div class="item-right">
-        <button class="del" data-id="${esc(it.id)}" aria-label="Remover">
+        <button class="del" data-id="${esc(it.uid)}" aria-label="Remover">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
         </button>
-        <button class="qty-chip" data-id="${esc(it.id)}">${it.qtd}</button>
+        <button class="qty-chip" data-id="${esc(it.uid)}">${it.qtd}</button>
       </div>`;
     list.appendChild(row);
   });
   const n = state.items.length;
   $("item-count").textContent = n + (n === 1 ? " item" : " itens");
-  $("total-units").textContent = totalUnidades().toLocaleString("pt-BR");
+  $("total-units").textContent = n.toLocaleString("pt-BR");
   $("go-pdf").disabled = $("go-xlsx").disabled = n === 0;
   list.querySelectorAll(".qty-chip").forEach(b => b.onclick = () => abrirQtd({ editarId: b.dataset.id }));
   list.querySelectorAll(".del").forEach(b => b.onclick = () => {
-    const it = state.items.find(i => i.id === b.dataset.id);
-    if (it && confirm("Excluir " + it.desc + "?")) { state.items = state.items.filter(i => i.id !== it.id); salvarEstado(); renderLista(); }
+    const it = state.items.find(i => i.uid === b.dataset.id);
+    if (it && confirm("Excluir " + it.desc + "?")) excluirItem(it);
   });
 }
 
@@ -507,7 +620,7 @@ let scanBusy = false;
 
 function abrirQtd(ctx){
   qtdCtx = ctx;
-  const existente = ctx.editarId ? state.items.find(i => i.id === ctx.editarId) : state.items.find(i => chave(i.ean) === chave(ctx.ean));
+  const existente = ctx.editarId ? state.items.find(i => i.uid === ctx.editarId) : state.items.find(i => chave(i.ean) === chave(ctx.ean));
   $("qty-exists").style.display = "none";
   $("qty-btns-new").style.display = $("qty-btns-exists").style.display = $("qty-btns-edit").style.display = "none";
   $("qty-desc-wrap").style.display = "none";
@@ -521,7 +634,7 @@ function abrirQtd(ctx){
     $("qty-input").value = existente.qtd;
     $("qty-btns-edit").style.display = "flex";
   } else if (existente) {
-    qtdCtx.modo = "existe"; qtdCtx.id = existente.id;
+    qtdCtx.modo = "existe"; qtdCtx.id = existente.uid;
     $("qty-sub").textContent = "Produto lido";
     $("qty-prod").textContent = existente.desc; $("qty-ean").textContent = existente.ean;
     $("qty-exists").style.display = "block";
@@ -559,11 +672,14 @@ function gravar(modo){
       desc = $("qty-desc-input").value.trim().toUpperCase();
       if (!desc) { showToast("Informe a descrição do produto"); $("qty-desc-input").focus(); return; }
     }
-    state.items.push({ ean: qtdCtx.ean, desc, qtd: q, id: novoId(), ts: Date.now(), naoCadastrado: !!qtdCtx.naoCadastrado });
+    const novo = { ean: qtdCtx.ean, desc, qtd: q, id: novoId(), ts: Date.now(), naoCadastrado: !!qtdCtx.naoCadastrado, uid: rnd(14), upd: 0 };
+    state.items.push(novo);
+    enfileirar(novo);
   } else {
-    const it = state.items.find(i => i.id === (qtdCtx.id || qtdCtx.editarId));
+    const it = state.items.find(i => i.uid === (qtdCtx.id || qtdCtx.editarId));
     if (!it) return;
     if (modo === "somar") it.qtd += q; else it.qtd = q;   // "substituir" e "editar"
+    enfileirar(it);
   }
   salvarEstado(); renderLista();
   showToast("Gravado");
@@ -775,8 +891,12 @@ function abrirCfg(obrigatorio){
 function salvarCfg(){
   const loja = $("cfg-loja").value.trim(), mat = $("cfg-mat").value.trim(), nome = $("cfg-nome").value.trim().toUpperCase(), id = $("cfg-ident").value.trim().toUpperCase();
   if (!loja || !mat || !nome || !id) { showToast("Preencha todos os campos"); return; }
+  const novaChave = (loja + "|" + id).toUpperCase().replace(/\s+/g, " ").trim();
+  if (state.items.length && state.sync && state.sync.chave && state.sync.chave !== novaChave) {
+    if (!confirm("Você tem " + state.items.length + " itens coletados. Ao mudar a Loja ou o Identificador, esses itens passam a fazer parte da NOVA lista. Se quiser guardar a lista atual, cancele, gere o PDF/Excel e toque em Nova coleta antes. Continuar mesmo assim?")) return;
+  }
   state.cfg = { loja, matricula: mat, nome, identificador: id };
-  salvarEstado(); renderIdent();
+  salvarEstado(); renderIdent(); agendarSync();
   $("cfg-modal").classList.remove("open");
 }
 
@@ -791,7 +911,7 @@ $("manual-add").onclick = () => { destravarAudio(); const v = $("manual-code").v
 $("manual-code").addEventListener("keydown", e => { if (e.key === "Enter") $("manual-add").click(); });
 $("clear-cart").onclick = () => {
   if (!state.items.length) return;
-  if (confirm("Iniciar uma nova coleta? Os " + state.items.length + " itens atuais serão apagados deste aparelho. Gere o PDF/Excel antes.")) { state.items = []; salvarEstado(); renderLista(); }
+  if (confirm("Iniciar uma nova coleta? Os " + state.items.length + " itens atuais serão apagados DESTE aparelho (os outros aparelhos da mesma lista não são afetados). Gere o PDF/Excel antes.")) { novaColeta(); }
 };
 $("refresh-catalog").onclick = () => { if (!PRODUCTS_ENDPOINT) showToast("Endpoint não configurado — use Importar CSV"); else loadBase(); };
 $("import-csv").onclick = () => $("csv-file").click();
@@ -807,8 +927,8 @@ $("qty-replace").onclick = () => gravar("substituir");
 $("qty-save-edit").onclick = () => gravar("editar");
 $("qty-delete").onclick = () => {
   if (!qtdCtx) return;
-  const it = state.items.find(i => i.id === qtdCtx.editarId);
-  if (it && confirm("Excluir " + it.desc + "?")) { state.items = state.items.filter(i => i.id !== it.id); salvarEstado(); renderLista(); fecharQtd(); }
+  const it = state.items.find(i => i.uid === qtdCtx.editarId);
+  if (it && confirm("Excluir " + it.desc + "?")) { excluirItem(it); fecharQtd(); }
 };
 ["qty-cancel", "qty-cancel2", "qty-cancel3"].forEach(id => $(id).onclick = fecharQtd);
 $("qty-input").addEventListener("keydown", e => {
@@ -818,8 +938,9 @@ $("qty-input").addEventListener("keydown", e => {
 
 /* ---------- Início ---------- */
 setTimeout(() => $("app-splash").classList.add("hide"), 400);
-renderIdent(); renderLista();
+garantirSync(); renderIdent(); renderLista();
 if (!state.cfg.loja) abrirCfg(true);
+iniciarSync();
 (async () => {
   const tinha = await loadCachedBase();
   if (!tinha || !catalogIsFresh()) loadBase();
