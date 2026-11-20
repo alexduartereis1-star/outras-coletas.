@@ -698,7 +698,7 @@ function aoLerCodigo(code){
 /* ---------- Scanner: nativo (BarcodeDetector) com Quagga de reserva ---------- */
 let quaggaRunning = false, usingNative = false, nativeStream = null, torchOn = false;
 let nativeLoopId = null, nativeWatchdogId = null, nativeWorked = false, wakeLock = null;
-const NATIVE_TIMEOUT_MS = 3500;
+const NATIVE_TIMEOUT_MS = 25000;   // só troca para o leitor alternativo se o nativo nunca leu nada nesse tempo
 
 async function pedirWakeLock(){ try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {} }
 function soltarWakeLock(){ try { if (wakeLock) wakeLock.release(); } catch (e) {} wakeLock = null; }
@@ -720,7 +720,15 @@ async function openScanner(){
 
 async function startNativeScanner(){
   usingNative = true; nativeWorked = false;
-  const detector = new BarcodeDetector({ formats: ["ean_13","ean_8","upc_a","upc_e","itf","code_128"] });
+  // Só usa o leitor nativo se o aparelho declara que lê EAN-13; senão cai direto no leitor alternativo
+  const queridos = ["ean_13","ean_8","upc_a","upc_e","itf","code_128"];
+  let formatos = queridos;
+  if (BarcodeDetector.getSupportedFormats) {
+    const suportados = await BarcodeDetector.getSupportedFormats();
+    if (!suportados.includes("ean_13")) throw new Error("leitor nativo sem suporte a EAN-13");
+    formatos = queridos.filter(f => suportados.includes(f));
+  }
+  const detector = new BarcodeDetector({ formats: formatos });
   const video = document.createElement("video");
   video.setAttribute("playsinline", ""); video.muted = true;
   video.style.width = "100%"; video.style.height = "100%"; video.style.objectFit = "cover";
