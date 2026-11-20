@@ -430,6 +430,13 @@ async function sincronizar(){
       const mudou = aplicarRemotos(data.rows || []);
       state.sync.cursor = data.cursor;
       if (data.gen !== undefined) state.sync.gen = String(data.gen);
+      const rop = enviados.find(o => o.uid === "__RESET__");
+      if (rop && data.rep && data.rep > (rop.ep || 0)) {           // o servidor usou uma época maior: alinha este aparelho
+        const antiga = rop.ep || 0, nova = data.rep;
+        state.sync.epoca = nova;
+        state.items.forEach(it => { if ((it.ep || 0) <= antiga) { it.ep = nova; state.out[it.uid] = opDe(it, false); } });
+        Object.keys(state.out).forEach(u => { if (u !== "__RESET__" && (state.out[u].ep || 0) <= antiga) state.out[u].ep = nova; });
+      }
       salvarEstado();
       if (mudou) renderLista();
       mais = !!data.more || Object.keys(state.out).length > 0 && enviados.length >= 400;
