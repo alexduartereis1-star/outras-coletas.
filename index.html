@@ -416,7 +416,7 @@ async function sincronizar(){
   if (navigator.onLine === false) { syncErro = "sem internet"; textoSync(); return; }
   syncBusy = true; textoSync();
   const enviados = Object.values(state.out).slice(0, 400);
-  const body = { k: state.sync.chave, dev: state.dev, cursor: state.sync.cursor, fim: state.sync.fim || 0, ops: enviados, quem: state.cfg.matricula };
+  const body = { k: state.sync.chave, dev: state.dev, cursor: state.sync.cursor, gen: state.sync.gen, fim: state.sync.fim || 0, ops: enviados, quem: state.cfg.matricula };
   const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 40000);
   let mais = false;
   try {
@@ -429,6 +429,7 @@ async function sincronizar(){
       if (body.fim && state.sync.fim === body.fim) state.sync.fim = 0;
       const mudou = aplicarRemotos(data.rows || []);
       state.sync.cursor = data.cursor;
+      if (data.gen !== undefined) state.sync.gen = String(data.gen);
       salvarEstado();
       if (mudou) renderLista();
       mais = !!data.more || Object.keys(state.out).length > 0 && enviados.length >= 400;
