@@ -333,11 +333,12 @@ function garantirSync(){
   if (!state.dev) state.dev = rnd(10);
   if (!state.out) state.out = {};
   if (!state.tomb) state.tomb = {};
-  if (!state.sync) state.sync = { chave: "", cursor: 1, fim: 0 };
+  if (!state.sync) state.sync = { chave: "", cursor: 1, fim: 0, epoca: 0 };
+  if (typeof state.sync.epoca !== "number") state.sync.epoca = 0;
   state.items.forEach(it => { if (!it.uid) it.uid = rnd(14); if (!it.upd) it.upd = it.ts || Date.now(); });
 }
 function chaveAtual(){ const c = state.cfg; if (!c.loja || !c.identificador) return ""; return (c.loja + "|" + c.identificador).toUpperCase().replace(/\s+/g, " ").trim(); }
-function opDe(it, del){ return { uid: it.uid, upd: it.upd, del: del ? 1 : 0, ean: it.ean, desc: it.desc, qtd: it.qtd, id: it.id, ts: it.ts, nao: it.naoCadastrado ? 1 : 0 }; }
+function opDe(it, del){ return { uid: it.uid, upd: it.upd, del: del ? 1 : 0, ean: it.ean, desc: it.desc, qtd: it.qtd, id: it.id, ts: it.ts, nao: it.naoCadastrado ? 1 : 0, ep: it.ep || 0 }; }
 function proxUpd(ant){ return Math.max(Date.now(), (ant || 0) + 1); }
 function enfileirar(it){ it.upd = proxUpd(it.upd); state.out[it.uid] = opDe(it, false); salvarEstado(); agendarSync(); }
 function excluirItem(it){
@@ -348,15 +349,18 @@ function excluirItem(it){
   salvarEstado(); renderLista(); agendarSync();
 }
 function novaColeta(){
-  state.items = []; state.out = {}; state.tomb = {};
-  state.sync.fim = Date.now();          // o próximo contato com a planilha pula tudo que já existe na lista
+  // Limpa a lista em TODOS os aparelhos da mesma Loja + Identificador: sobe a "época" da lista e avisa pela planilha
+  const ep = (state.sync.epoca || 0) + 1, agora = Date.now();
+  state.items = []; state.tomb = {};
+  state.out = { "__RESET__": { uid: "__RESET__", upd: agora, del: 0, ean: "", desc: "LIMPAR", qtd: 0, id: "", ts: agora, nao: 0, ep: ep } };
+  state.sync.epoca = ep;
   salvarEstado(); renderLista(); agendarSync();
 }
 
 function verificarChave(){
   const k = chaveAtual(); if (!k) return false;
   if (state.sync.chave !== k) {          // primeira vez, ou mudou Loja/Identificador: sobe o que já está neste aparelho
-    state.sync = { chave: k, cursor: 1, fim: 0 };
+    state.sync = { chave: k, cursor: 1, fim: 0, epoca: 0 };
     state.tomb = {}; state.out = {};
     state.items.forEach(it => { state.out[it.uid] = opDe(it, false); });
     salvarEstado();
@@ -367,14 +371,26 @@ function verificarChave(){
 function aplicarRemotos(rows){
   let mudou = false;
   rows.forEach(r => {
-    const uid = String(r[0]), upd = Number(r[1]), del = String(r[2]) === "1";
+    const uid = String(r[0]), upd = Number(r[1]), del = String(r[2]) === "1", ep = Number(r[9]) || 0;
+    if (uid === "__RESET__") {                        // alguém tocou em "Nova coleta" nesta lista
+      if (ep > state.sync.epoca) {
+        state.sync.epoca = ep;
+        const antes = state.items.length;
+        state.items = state.items.filter(i => (i.ep || 0) >= ep);
+        state.tomb = {};
+        Object.keys(state.out).forEach(k => { if (k !== "__RESET__" && (state.out[k].ep || 0) < ep) delete state.out[k]; });
+        if (state.items.length !== antes) mudou = true;
+      }
+      return;
+    }
+    if (ep < state.sync.epoca) return;                // gravação de antes da limpeza (ex.: aparelho que estava sem internet)
     const local = state.items.find(i => i.uid === uid);
     const pend = state.out[uid];
     if (pend && pend.upd >= upd) return;
     if (local && local.upd >= upd) return;
     if (state.tomb[uid] && state.tomb[uid] >= upd) return;
     if (del) { if (local) { state.items = state.items.filter(i => i !== local); mudou = true; } state.tomb[uid] = upd; return; }
-    const d = { ean: String(r[3]), desc: String(r[4]), qtd: Number(r[5]) || 0, id: String(r[6]), ts: Number(r[7]) || upd, naoCadastrado: String(r[8]) === "1", uid: uid, upd: upd };
+    const d = { ean: String(r[3]), desc: String(r[4]), qtd: Number(r[5]) || 0, id: String(r[6]), ts: Number(r[7]) || upd, naoCadastrado: String(r[8]) === "1", uid: uid, upd: upd, ep: ep };
     if (local) Object.assign(local, d); else state.items.push(d);
     mudou = true;
   });
@@ -670,7 +686,7 @@ function gravar(modo){
       desc = $("qty-desc-input").value.trim().toUpperCase();
       if (!desc) { showToast("Informe a descrição do produto"); $("qty-desc-input").focus(); return; }
     }
-    const novo = { ean: qtdCtx.ean, desc, qtd: q, id: novoId(), ts: Date.now(), naoCadastrado: !!qtdCtx.naoCadastrado, uid: rnd(14), upd: 0 };
+    const novo = { ean: qtdCtx.ean, desc, qtd: q, id: novoId(), ts: Date.now(), naoCadastrado: !!qtdCtx.naoCadastrado, uid: rnd(14), upd: 0, ep: state.sync.epoca || 0 };
     state.items.push(novo);
     enfileirar(novo);
   } else {
@@ -916,8 +932,9 @@ $("close-scanner").onclick = closeScanner;
 $("manual-add").onclick = () => { destravarAudio(); const v = $("manual-code").value.trim(); if (v) { aoLerCodigo(v); $("manual-code").value = ""; } };
 $("manual-code").addEventListener("keydown", e => { if (e.key === "Enter") $("manual-add").click(); });
 $("clear-cart").onclick = () => {
-  if (!state.items.length) return;
-  if (confirm("Iniciar uma nova coleta? Os " + state.items.length + " itens atuais serão apagados DESTE aparelho (os outros aparelhos da mesma lista não são afetados). Gere o PDF/Excel antes.")) { novaColeta(); }
+  const lista = (state.cfg.loja || "") + " · " + (state.cfg.identificador || "");
+  const resp = prompt("ATENÇÃO: isto apaga a lista " + lista + " em TODOS os aparelhos que usam a mesma Loja e o mesmo Identificador (" + state.items.length + " itens neste aparelho).\n\nGere o PDF/Excel antes.\n\nPara confirmar, digite LIMPAR:");
+  if (resp && resp.trim().toUpperCase() === "LIMPAR") novaColeta();
 };
 $("refresh-catalog").onclick = () => { if (!PRODUCTS_ENDPOINT) showToast("Base não conectada — fale com o responsável pelo app"); else loadBase(); };
 $("go-pdf").onclick = gerarPDF;
