@@ -348,12 +348,23 @@ function excluirItem(it){
   state.out[it.uid] = Object.assign(opDe(it, true), { upd });
   salvarEstado(); renderLista(); agendarSync();
 }
-function novaColeta(){
-  // Limpa a lista em TODOS os aparelhos da mesma Loja + Identificador: sobe a "época" da lista e avisa pela planilha
+function novaColeta(novoIdent){
+  // Limpa a lista em TODOS os aparelhos da mesma Loja + Identificador: sobe a "época" da lista e avisa pela planilha.
+  // Se vier um identificador novo, os outros aparelhos dessa lista também passam para ele.
   const ep = (state.sync.epoca || 0) + 1, agora = Date.now();
+  const novo = String(novoIdent || "").trim().toUpperCase();
+  const mudar = !!novo && novo !== (state.cfg.identificador || "").toUpperCase();
+  const op = { uid: "__RESET__", upd: agora, del: 0, ean: "", desc: "LIMPAR", qtd: 0, id: mudar ? novo : "", ts: agora, nao: 0, ep: ep };
   state.items = []; state.tomb = {};
-  state.out = { "__RESET__": { uid: "__RESET__", upd: agora, del: 0, ean: "", desc: "LIMPAR", qtd: 0, id: "", ts: agora, nao: 0, ep: ep } };
-  state.sync.epoca = ep;
+  if (mudar) {
+    if (state.sync.chave) state.resetOut = { k: state.sync.chave, op: op };    // o aviso vai para a lista ANTIGA
+    state.cfg.identificador = novo;
+    state.out = {}; state.sync = { chave: "", cursor: 1, fim: 0, epoca: 0 };      // este aparelho começa a lista nova
+    renderIdent();
+  } else {
+    state.out = { "__RESET__": op };
+    state.sync.epoca = ep;
+  }
   salvarEstado(); renderLista(); agendarSync();
 }
 
@@ -369,10 +380,21 @@ function verificarChave(){
 }
 
 function aplicarRemotos(rows){
-  let mudou = false;
+  let mudou = false, parar = false;
   rows.forEach(r => {
+    if (parar) return;
     const uid = String(r[0]), upd = Number(r[1]), del = String(r[2]) === "1", ep = Number(r[9]) || 0;
     if (uid === "__RESET__") {                        // alguém tocou em "Nova coleta" nesta lista
+      const alvo = String(r[6] || "").trim().toUpperCase();
+      if (ep > state.sync.epoca && alvo && state.sync.pronto && alvo !== (state.cfg.identificador || "").toUpperCase()) {
+        // "Nova coleta" com troca de identificador: este aparelho acompanha a lista nova
+        state.cfg.identificador = alvo;
+        state.items = []; state.tomb = {}; state.out = {};
+        state.sync = { chave: "", cursor: 1, fim: 0, epoca: 0 };
+        parar = true; mudou = true; renderIdent();
+        showToast("Nova coleta: o identificador agora é " + alvo);
+        return;
+      }
       if (ep > state.sync.epoca) {
         state.sync.epoca = ep;
         const antes = state.items.length;
@@ -420,6 +442,14 @@ async function sincronizar(){
   const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 40000);
   let mais = false;
   try {
+    if (state.resetOut) {                                           // aviso de "Nova coleta" da lista antiga, ainda não enviado
+      const ro = state.resetOut;
+      const r0 = await fetch(PRODUCTS_ENDPOINT, { method: "POST", body: JSON.stringify({ k: ro.k, dev: state.dev, cursor: 1, fim: 1, ops: [ro.op], quem: state.cfg.matricula }), headers: { "Content-Type": "text/plain;charset=utf-8" }, signal: ctl.signal });
+      let d0; try { d0 = JSON.parse(await r0.text()); } catch (e) { throw new Error("o script ainda não foi atualizado"); }
+      if (!d0 || !d0.ok) throw new Error((d0 && d0.erro) || "resposta inválida");
+      if (state.resetOut === ro) delete state.resetOut;
+      salvarEstado();
+    }
     const res = await fetch(PRODUCTS_ENDPOINT, { method: "POST", body: JSON.stringify(body), headers: { "Content-Type": "text/plain;charset=utf-8" }, signal: ctl.signal });
     let data; const txt = await res.text();
     try { data = JSON.parse(txt); } catch (e) { throw new Error("o script ainda não foi atualizado"); }
@@ -428,6 +458,8 @@ async function sincronizar(){
       enviados.forEach(op => { const a = state.out[op.uid]; if (a && a.upd === op.upd && a.del === op.del) delete state.out[op.uid]; });
       if (body.fim && state.sync.fim === body.fim) state.sync.fim = 0;
       const mudou = aplicarRemotos(data.rows || []);
+      if (state.sync.chave !== body.k) { salvarEstado(); renderLista(); mais = true; }   // este aparelho mudou de lista
+      else { state.sync.pronto = true;
       state.sync.cursor = data.cursor;
       if (data.gen !== undefined) state.sync.gen = String(data.gen);
       const rop = enviados.find(o => o.uid === "__RESET__");
@@ -440,6 +472,7 @@ async function sincronizar(){
       salvarEstado();
       if (mudou) renderLista();
       mais = !!data.more || Object.keys(state.out).length > 0 && enviados.length >= 400;
+      }
     }
     syncErro = ""; const d = new Date(); syncHora = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
   } catch (err) {
@@ -942,7 +975,11 @@ $("manual-code").addEventListener("keydown", e => { if (e.key === "Enter") $("ma
 $("clear-cart").onclick = () => {
   const lista = (state.cfg.loja || "") + " · " + (state.cfg.identificador || "");
   const resp = prompt("ATENÇÃO: isto apaga a lista " + lista + " em TODOS os aparelhos que usam a mesma Loja e o mesmo Identificador (" + state.items.length + " itens neste aparelho).\n\nGere o PDF/Excel antes.\n\nPara confirmar, digite LIMPAR:");
-  if (resp && resp.trim().toUpperCase() === "LIMPAR") novaColeta();
+  if (resp && resp.trim().toUpperCase() === "LIMPAR") {
+    const atual = state.cfg.identificador || "";
+    const novo = prompt("Nova coleta: qual o IDENTIFICADOR da próxima lista?\n\nAtual: " + atual + "\nPara continuar com o mesmo, deixe como está. Para trocar (ex.: AGUA), digite o novo nome — os outros aparelhos desta lista também vão trocar.", atual);
+    novaColeta(novo === null ? atual : novo);
+  }
 };
 $("refresh-catalog").onclick = () => { if (!PRODUCTS_ENDPOINT) showToast("Base não conectada — fale com o responsável pelo app"); else loadBase(); };
 $("go-pdf").onclick = gerarPDF;
