@@ -239,6 +239,11 @@
     <input type="text" id="cfg-mat" placeholder="Ex.: brrro095" autocomplete="off" autocapitalize="none">
     <label for="cfg-nome">Nome completo</label>
     <input type="text" id="cfg-nome" placeholder="Ex.: ROSIMEIRE DE LIMA RANGEL RAMOS" autocomplete="off" autocapitalize="characters">
+    <label for="cfg-tipo">Local da coleta</label>
+    <select id="cfg-tipo" style="width:100%; padding:12px; border:1px solid #dfe2e4; border-radius:10px; font-size:15px; background:#fff; font-family:var(--font-body);">
+      <option value="LOJA">Loja</option>
+      <option value="DEPOSITO">Depósito</option>
+    </select>
     <label for="cfg-ident">Identificador informado no coletor</label>
     <input type="text" id="cfg-ident" placeholder="Ex.: D001" autocomplete="off" autocapitalize="characters">
     <div class="btn-row">
@@ -338,7 +343,8 @@ function garantirSync(){
   if (typeof state.sync.epoca !== "number") state.sync.epoca = 0;
   state.items.forEach(it => { if (!it.uid) it.uid = rnd(14); if (!it.upd) it.upd = it.ts || Date.now(); });
 }
-function chaveAtual(){ const c = state.cfg; if (!c.loja || !c.identificador) return ""; return (c.loja + "|" + c.identificador).toUpperCase().replace(/\s+/g, " ").trim(); }
+function ehDeposito(){ return state.cfg && state.cfg.tipo === "DEPOSITO"; }
+function chaveAtual(){ const c = state.cfg; if (!c.loja || !c.identificador) return ""; return (c.loja + "|" + c.identificador + (ehDeposito() ? "|DEPOSITO" : "")).toUpperCase().replace(/\s+/g, " ").trim(); }
 function opDe(it, del){ return { uid: it.uid, upd: it.upd, del: del ? 1 : 0, ean: it.ean, desc: it.desc, qtd: it.qtd, id: it.id, ts: it.ts, nao: it.naoCadastrado ? 1 : 0, ep: it.ep || 0 }; }
 function proxUpd(ant){ return Math.max(Date.now(), (ant || 0) + 1); }
 function enfileirar(it){ it.upd = proxUpd(it.upd); state.out[it.uid] = opDe(it, false); salvarEstado(); agendarSync(); }
@@ -650,7 +656,7 @@ function renderLista(){
 
 function renderIdent(){
   const c = state.cfg;
-  $("ident-l1").textContent = (c.loja ? "Loja " + c.loja : "Loja não informada") + (c.identificador ? " · " + c.identificador : "");
+  $("ident-l1").textContent = (c.loja ? (c.tipo === "DEPOSITO" ? "Depósito " : "Loja ") + c.loja : "Loja não informada") + (c.identificador ? " · " + c.identificador : "");
   $("ident-l2").textContent = (c.matricula || "") + (c.nome ? " - " + c.nome : "") || "Toque em Editar para informar o responsável";
 }
 
@@ -892,7 +898,7 @@ function nomeArquivo(ext){
   const c = state.cfg, d = new Date();
   const dt = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
   const limpa = (s) => String(s || "").replace(/[^A-Za-z0-9_-]/g, "");
-  return ["PreContagem", c.loja ? "Loja" + limpa(c.loja) : "", limpa(c.identificador), dt].filter(Boolean).join("_") + "." + ext;
+  return ["PreContagem", c.loja ? (c.tipo === "DEPOSITO" ? "Deposito" : "Loja") + limpa(c.loja) : "", limpa(c.identificador), dt].filter(Boolean).join("_") + "." + ext;
 }
 
 function exigirCfg(){
@@ -913,15 +919,15 @@ function gerarExcel(){
   if (!state.items.length || !exigirCfg()) return;
   if (!window.XLSX) { showToast("Gerador de Excel ainda carregando — tente de novo"); return; }
   const c = state.cfg;
-  const cab = ["LOJA", "IDENTIFICADOR", "RESPONSÁVEL", "ITEM", "ID", "COD_EAN", "DESCRIÇÃO", "QUANTIDADE", "DATA/HORA", "CADASTRADO NA BASE"];
+  const cab = ["LOJA", "LOCAL", "IDENTIFICADOR", "RESPONSÁVEL", "ITEM", "ID", "COD_EAN", "DESCRIÇÃO", "QUANTIDADE", "DATA/HORA", "CADASTRADO NA BASE"];
   const linhas = state.items.map((it, i) => [
-    c.loja, c.identificador, c.matricula + " - " + c.nome, i + 1, it.id, String(it.ean), it.desc, it.qtd,
+    c.loja, c.tipo === "DEPOSITO" ? "DEPÓSITO" : "LOJA", c.identificador, c.matricula + " - " + c.nome, i + 1, it.id, String(it.ean), it.desc, it.qtd,
     new Date(it.ts).toLocaleString("pt-BR"), it.naoCadastrado ? "NÃO" : "SIM"
   ]);
   const ws = XLSX.utils.aoa_to_sheet([cab].concat(linhas));
   // EAN como texto (senão o Excel arredonda de novo)
-  for (let r = 1; r <= linhas.length; r++) { const cell = ws["F" + (r + 1)]; if (cell) { cell.t = "s"; cell.z = "@"; } }
-  ws["!cols"] = [{wch:7},{wch:14},{wch:34},{wch:6},{wch:10},{wch:16},{wch:46},{wch:11},{wch:19},{wch:12}];
+  for (let r = 1; r <= linhas.length; r++) { const cell = ws["G" + (r + 1)]; if (cell) { cell.t = "s"; cell.z = "@"; } }
+  ws["!cols"] = [{wch:7},{wch:11},{wch:14},{wch:34},{wch:6},{wch:10},{wch:16},{wch:46},{wch:11},{wch:19},{wch:12}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Coleta");
   XLSX.writeFile(wb, nomeArquivo("xlsx"));
@@ -932,7 +938,7 @@ let cfgObrigatorio = false;
 function abrirCfg(obrigatorio){
   cfgObrigatorio = !!obrigatorio;
   $("cfg-loja").value = state.cfg.loja || ""; $("cfg-mat").value = state.cfg.matricula || "";
-  $("cfg-nome").value = state.cfg.nome || ""; $("cfg-ident").value = state.cfg.identificador || "";
+  $("cfg-nome").value = state.cfg.nome || ""; $("cfg-ident").value = state.cfg.identificador || ""; $("cfg-tipo").value = state.cfg.tipo === "DEPOSITO" ? "DEPOSITO" : "LOJA";
   $("cfg-cancel").style.display = cfgObrigatorio ? "none" : "block";
   $("cfg-modal").classList.add("open");
 }
@@ -940,7 +946,7 @@ function salvarCfg(){
   const loja = $("cfg-loja").value.trim(), mat = $("cfg-mat").value.trim(), nome = $("cfg-nome").value.trim().toUpperCase(), id = $("cfg-ident").value.trim().toUpperCase();
   if (!loja || !mat || !nome || !id) { showToast("Preencha todos os campos"); return; }
   const velha = (state.sync && state.sync.chave) || chaveAtual();
-  state.cfg = { loja, matricula: mat, nome, identificador: id };
+  state.cfg = { loja, matricula: mat, nome, identificador: id, tipo: $("cfg-tipo").value === "DEPOSITO" ? "DEPOSITO" : "LOJA" };
   const nova = chaveAtual();
   if (velha && nova !== velha) { trocarLista(velha, nova); showToast("Lista anterior guardada neste aparelho. Para voltar, informe o mesmo identificador."); }
   salvarEstado(); renderIdent(); renderLista(); agendarSync();
@@ -958,18 +964,22 @@ $("manual-add").onclick = () => { destravarAudio(); const v = $("manual-code").v
 $("manual-code").addEventListener("keydown", e => { if (e.key === "Enter") $("manual-add").click(); });
 $("clear-cart").onclick = () => {
   const ls = listasDoAparelho();
-  const nome = k => (k.split("|")[1] || k);
+  const nome = k => { const a = k.split("|"); return (a[1] || k) + (a[2] === "DEPOSITO" ? " [DEPÓSITO]" : " [LOJA]"); };
   const resp = prompt("NOVA COLETA — nada é apagado: a lista atual fica guardada neste aparelho e a próxima começa do zero.\n\n" +
     (ls.length ? "Listas neste aparelho:\n" + ls.map(l => "• " + nome(l.k) + " (" + l.n + " itens)" + (l.atual ? "  ← atual" : "")).join("\n") + "\n\n" : "") +
     "Digite o IDENTIFICADOR da próxima lista (um novo, ou um da lista acima para voltar a ele):", "");
   const novo = (resp || "").trim().toUpperCase();
   if (!novo) return;
+  const r2 = prompt("Esta coleta é de LOJA ou de DEPÓSITO?\n\nDigite 1 para LOJA\nDigite 2 para DEPÓSITO", ehDeposito() ? "2" : "1");
+  if (r2 === null) return;
+  const tipo = String(r2).trim() === "2" || /^d/i.test(String(r2).trim()) ? "DEPOSITO" : "LOJA";
   const velha = (state.sync && state.sync.chave) || chaveAtual();
-  if (novo === (state.cfg.identificador || "").toUpperCase()) { showToast("Essa já é a lista atual"); return; }
-  state.cfg.identificador = novo;
+  const cfgAnt = state.cfg;
+  state.cfg = Object.assign({}, cfgAnt, { identificador: novo, tipo: tipo });
+  if (chaveAtual() === velha) { state.cfg = cfgAnt; showToast("Essa já é a lista atual"); return; }
   trocarLista(velha, chaveAtual());
   salvarEstado(); renderIdent(); renderLista(); agendarSync();
-  showToast("Lista " + novo + " aberta. A anterior ficou guardada.");
+  showToast("Lista " + novo + " (" + (tipo === "DEPOSITO" ? "Depósito" : "Loja") + ") aberta. A anterior ficou guardada.");
 };
 $("clear-data").onclick = () => {
   const lista = (state.cfg.loja || "") + " · " + (state.cfg.identificador || "");
@@ -981,6 +991,13 @@ $("go-pdf").onclick = gerarPDF;
 $("go-xlsx").onclick = gerarExcel;
 $("edit-cfg").onclick = () => abrirCfg(false);
 $("cfg-save").onclick = salvarCfg;
+$("cfg-ident").addEventListener("input", () => {
+  // se esse identificador já existe neste aparelho (só em Loja ou só em Depósito), já marca o Local certo
+  const id = $("cfg-ident").value.trim().toUpperCase(), loja = $("cfg-loja").value.trim().toUpperCase();
+  if (!id) return;
+  const achou = listasDoAparelho().map(l => l.k.split("|")).filter(a => a[0] === loja && a[1] === id);
+  if (achou.length === 1) $("cfg-tipo").value = achou[0][2] === "DEPOSITO" ? "DEPOSITO" : "LOJA";
+});
 $("cfg-cancel").onclick = () => $("cfg-modal").classList.remove("open");
 $("qty-save").onclick = () => gravar("novo");
 $("qty-sum").onclick = () => gravar("somar");

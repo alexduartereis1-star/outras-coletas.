@@ -71,6 +71,11 @@
     doc.text("Identificador informado no coletor:", p(34), p(142));
     doc.setFont("helvetica", "bold");
     doc.text(String(d.cfg.identificador || ""), p(250), p(142));
+    doc.setFont("helvetica", "normal");
+    doc.text("Local da coleta:", p(540), p(142));
+    var wl = doc.getTextWidth("Local da coleta: ");
+    doc.setFont("helvetica", "bold");
+    doc.text(d.cfg.tipo === "DEPOSITO" ? "DEPÓSITO" : "LOJA", p(540) + wl, p(142));
   }
 
   /* bloco de 1 item; topo = y (px) do início do bloco (no modelo = 526) */
