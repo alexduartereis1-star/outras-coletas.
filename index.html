@@ -355,12 +355,22 @@ function excluirItem(it){
   state.out[it.uid] = Object.assign(opDe(it, true), { upd });
   salvarEstado(); renderLista(); agendarSync();
 }
-function limparDados(){
-  // APAGA a lista atual (Loja + Identificador do topo) em TODOS os aparelhos: sobe a "época" da lista e avisa pela planilha
+function limparDados(todas){
+  // APAGA a lista atual (Loja + Identificador do topo) em TODOS os aparelhos: sobe a "época" da lista e avisa pela planilha.
+  // todas = true: faz o mesmo com TODAS as listas guardadas neste aparelho.
   const ep = (state.sync.epoca || 0) + 1, agora = Date.now();
   state.items = []; state.tomb = {};
   state.out = { "__RESET__": { uid: "__RESET__", upd: agora, del: 0, ean: "", desc: "LIMPAR", qtd: 0, id: "", ts: agora, nao: 0, ep: ep } };
   state.sync.epoca = ep;
+  if (todas) {
+    if (!state.resetFila) state.resetFila = [];
+    Object.keys(state.listas || {}).forEach(k => {
+      const l = state.listas[k]; if (!l || !l.sync) return;
+      const e2 = (l.sync.epoca || 0) + 1;
+      state.resetFila.push({ k: k, op: { uid: "__RESET__", upd: agora, del: 0, ean: "", desc: "LIMPAR", qtd: 0, id: "", ts: agora, nao: 0, ep: e2 } });
+      l.items = []; l.tomb = {}; l.out = {}; l.sync.epoca = e2;
+    });
+  }
   salvarEstado(); renderLista(); agendarSync();
 }
 
@@ -444,6 +454,15 @@ async function sincronizar(){
   const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 40000);
   let mais = false;
   try {
+    while (state.resetFila && state.resetFila.length) {             // "Limpar dados" de listas guardadas: avisa a planilha e os outros aparelhos
+      const ro = state.resetFila[0];
+      const r0 = await fetch(PRODUCTS_ENDPOINT, { method: "POST", body: JSON.stringify({ k: ro.k, dev: state.dev, cursor: 1, fim: 1, ops: [ro.op], quem: state.cfg.matricula }), headers: { "Content-Type": "text/plain;charset=utf-8" }, signal: ctl.signal });
+      let d0; try { d0 = JSON.parse(await r0.text()); } catch (e) { throw new Error("o script ainda não foi atualizado"); }
+      if (!d0 || !d0.ok) throw new Error((d0 && d0.erro) || "resposta inválida");
+      const alvo = (state.sync && state.sync.chave === ro.k) ? state.sync : (state.listas && state.listas[ro.k] && state.listas[ro.k].sync);
+      if (alvo && d0.rep && d0.rep > (alvo.epoca || 0)) alvo.epoca = d0.rep;       // alinha com a época que o servidor definiu
+      state.resetFila.shift(); salvarEstado();
+    }
     const res = await fetch(PRODUCTS_ENDPOINT, { method: "POST", body: JSON.stringify(body), headers: { "Content-Type": "text/plain;charset=utf-8" }, signal: ctl.signal });
     let data; const txt = await res.text();
     try { data = JSON.parse(txt); } catch (e) { throw new Error("o script ainda não foi atualizado"); }
@@ -967,23 +986,21 @@ function gerarExcel(){
   if (!grupos || !grupos.length) return;
   if (!window.XLSX) { showToast("Gerador de Excel ainda carregando — tente de novo"); return; }
   const cab = ["LOJA", "LOCAL", "IDENTIFICADOR", "RESPONSÁVEL", "ITEM", "ID", "COD_EAN", "DESCRIÇÃO", "QUANTIDADE", "DATA/HORA", "CADASTRADO NA BASE"];
-  const wb = XLSX.utils.book_new();
-  const usados = {};
+  // Uma única aba: cada identificador em sequência, um embaixo do outro (a numeração de ITEM recomeça em cada lista)
+  const linhas = [];
   grupos.forEach(g => {
     const c = g.cfg;
-    const linhas = g.items.map((it, i) => [
+    g.items.forEach((it, i) => linhas.push([
       c.loja, c.tipo === "DEPOSITO" ? "DEPÓSITO" : "LOJA", c.identificador, state.cfg.matricula + " - " + state.cfg.nome, i + 1, it.id, String(it.ean), it.desc, it.qtd,
       new Date(it.ts).toLocaleString("pt-BR"), it.naoCadastrado ? "NÃO" : "SIM"
-    ]);
-    const ws = XLSX.utils.aoa_to_sheet([cab].concat(linhas));
-    // EAN como texto (senão o Excel arredonda de novo)
-    for (let r = 1; r <= linhas.length; r++) { const cell = ws["G" + (r + 1)]; if (cell) { cell.t = "s"; cell.z = "@"; } }
-    ws["!cols"] = [{wch:7},{wch:11},{wch:14},{wch:34},{wch:6},{wch:10},{wch:16},{wch:46},{wch:11},{wch:19},{wch:12}];
-    let nome = String(c.identificador + (c.tipo === "DEPOSITO" ? " DEP" : " LOJA")).replace(/[\\\/\?\*\[\]:]/g, "").slice(0, 28) || "Coleta";
-    let n = nome, i = 2; while (usados[n.toUpperCase()]) { n = nome.slice(0, 26) + " " + i++; }
-    usados[n.toUpperCase()] = 1;
-    XLSX.utils.book_append_sheet(wb, ws, n);
+    ]));
   });
+  const ws = XLSX.utils.aoa_to_sheet([cab].concat(linhas));
+  // EAN como texto (senão o Excel arredonda de novo)
+  for (let r = 1; r <= linhas.length; r++) { const cell = ws["G" + (r + 1)]; if (cell) { cell.t = "s"; cell.z = "@"; } }
+  ws["!cols"] = [{wch:7},{wch:11},{wch:14},{wch:34},{wch:6},{wch:10},{wch:16},{wch:46},{wch:11},{wch:19},{wch:12}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Coleta");
   XLSX.writeFile(wb, nomeArquivoGrupos(grupos, "xlsx"));
 }
 
@@ -1036,9 +1053,19 @@ $("clear-cart").onclick = () => {
   showToast("Lista " + novo + " (" + (tipo === "DEPOSITO" ? "Depósito" : "Loja") + ") aberta. A anterior ficou guardada.");
 };
 $("clear-data").onclick = () => {
-  const lista = (state.cfg.loja || "") + " · " + (state.cfg.identificador || "");
-  const resp = prompt("ATENÇÃO: isto APAGA a lista " + lista + " em TODOS os aparelhos que usam a mesma Loja e o mesmo Identificador (" + state.items.length + " itens neste aparelho). Outras listas não são afetadas.\n\nGere o PDF/Excel antes.\n\nPara confirmar, digite LIMPAR:");
-  if (resp && resp.trim().toUpperCase() === "LIMPAR") limparDados();
+  const ls = listasDoAparelho();
+  const nome = k => { const a = k.split("|"); return (a[1] || k) + (a[2] === "DEPOSITO" ? " [DEPÓSITO]" : " [LOJA]"); };
+  const lista = nome((state.sync && state.sync.chave) || chaveAtual() || "") ;
+  let todas = false;
+  if (ls.length > 1) {
+    const r = prompt("LIMPAR DADOS — o que apagar?\n\n1 = Somente a lista atual: " + lista + " (" + state.items.length + " itens)\n2 = TODAS as listas deste aparelho (" + ls.length + "):\n" +
+      ls.map(l => "   - " + nome(l.k) + " (" + l.n + " itens)").join("\n") + "\n\nDigite 1 ou 2:", "1");
+    if (r === null) return;
+    todas = String(r).trim() === "2";
+  }
+  const total = todas ? ls.reduce((a, l) => a + l.n, 0) : state.items.length;
+  const resp = prompt("ATENÇÃO: isto APAGA " + (todas ? "TODAS as " + ls.length + " listas deste aparelho" : "a lista " + lista) + " em TODOS os aparelhos que usam a mesma Loja e o mesmo Identificador (" + total + " itens neste aparelho). " + (todas ? "" : "Outras listas não são afetadas.") + "\n\nGere o PDF/Excel antes.\n\nPara confirmar, digite LIMPAR:");
+  if (resp && resp.trim().toUpperCase() === "LIMPAR") limparDados(todas);
 };
 $("refresh-catalog").onclick = () => { if (!PRODUCTS_ENDPOINT) showToast("Base não conectada — fale com o responsável pelo app"); else loadBase(); };
 $("go-pdf").onclick = gerarPDF;
