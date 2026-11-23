@@ -939,11 +939,22 @@ function nomeArquivoGrupos(grupos, ext){
   return ["PreContagem", state.cfg.loja ? String(state.cfg.loja).replace(/[^A-Za-z0-9_-]/g, "") : "", "TodasAsListas", dt].filter(Boolean).join("_") + "." + ext;
 }
 
+/* Limpa o cache do app e recarrega: usado quando o aparelho ficou com arquivos de uma versão antiga */
+async function atualizarApp(){
+  showToast("Atualizando o app… aguarde");
+  try {
+    if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
+    if (navigator.serviceWorker) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r => r.unregister())); }
+  } catch (e) { console.error(e); }
+  setTimeout(() => location.reload(), 800);
+}
+
 async function gerarPDF(){
   if (!exigirCfg()) return;
   const grupos = escolherListas("PDF");
   if (!grupos || !grupos.length) return;
   if (!window.jspdf || !window.OC_PDF) { showToast("Gerador de PDF ainda carregando — tente de novo"); return; }
+  if (!(OC_PDF.versao >= 2)) { await atualizarApp(); return; }      // arquivo do PDF antigo ficou guardado no aparelho
   try {
     const doc = OC_PDF.gerarPDF(window.jspdf.jsPDF, { grupos: grupos.map(g => ({ cfg: g.cfg, items: g.items })), logo: await carregarLogo() });
     doc.save(nomeArquivoGrupos(grupos, "pdf"));

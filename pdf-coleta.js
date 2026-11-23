@@ -173,7 +173,7 @@
     return doc;
   }
 
-  var api = { code39Bars: code39Bars, gerarPDF: gerarPDF };
+  var api = { versao: 2, code39Bars: code39Bars, gerarPDF: gerarPDF };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.OC_PDF = api;
 })(typeof window !== "undefined" ? window : globalThis);
