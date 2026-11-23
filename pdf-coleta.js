@@ -60,7 +60,7 @@
     if (d.logo) { try { doc.addImage(d.logo, "PNG", p(46), p(51), p(118), p(24.8)); } catch (e) {} }
     doc.setFont("helvetica", "normal");
     doc.setFontSize(14);
-    doc.text("Pré Contagem", p(346), p(71), { align: "center" });
+    doc.text("Pré Contagem - " + (d.cfg.tipo === "DEPOSITO" ? "DEPÓSITO" : "LOJA"), p(346), p(71), { align: "center" });
     doc.setFontSize(7);
     var resp = "Responsável da Pré contagem:" + (d.cfg.matricula || "") + (d.cfg.nome ? " - " + d.cfg.nome : "");
     doc.text(resp, p(42), p(88));
