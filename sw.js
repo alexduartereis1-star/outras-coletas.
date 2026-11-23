@@ -1,4 +1,4 @@
-const CACHE_NAME = "outras-coletas-v5";
+const CACHE_NAME = "outras-coletas-v6";
 const CORE_ASSETS = ["./", "./index.html", "./pdf-coleta.js", "./manifest.json", "./icon-144.png"];
 // Bibliotecas externas: guardadas para o app abrir (e escanear/gerar PDF) sem internet depois do primeiro uso
 const CDN_ASSETS = [

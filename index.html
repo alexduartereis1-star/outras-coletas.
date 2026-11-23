@@ -646,7 +646,7 @@ function renderLista(){
   const n = state.items.length;
   $("item-count").textContent = n + (n === 1 ? " item" : " itens");
   $("total-units").textContent = n.toLocaleString("pt-BR");
-  $("go-pdf").disabled = $("go-xlsx").disabled = n === 0;
+  $("go-pdf").disabled = $("go-xlsx").disabled = (n === 0 && gruposComItens().length === 0);
   list.querySelectorAll(".qty-chip").forEach(b => b.onclick = () => abrirQtd({ editarId: b.dataset.id }));
   list.querySelectorAll(".del").forEach(b => b.onclick = () => {
     const it = state.items.find(i => i.uid === b.dataset.id);
@@ -906,31 +906,74 @@ function exigirCfg(){
   return true;
 }
 
+/* Listas (Loja + Identificador) deste aparelho que têm itens: a atual e as guardadas */
+function gruposComItens(){
+  const g = [];
+  const atualK = (state.sync && state.sync.chave) || chaveAtual();
+  if (state.items.length) g.push({ k: atualK, cfg: state.cfg, items: state.items, atual: true });
+  Object.keys(state.listas || {}).forEach(k => {
+    const l = state.listas[k]; if (!l || !(l.items || []).length) return;
+    const a = k.split("|");
+    g.push({ k: k, cfg: Object.assign({}, state.cfg, { loja: a[0], identificador: a[1], tipo: a[2] === "DEPOSITO" ? "DEPOSITO" : "LOJA" }), items: l.items, atual: false });
+  });
+  return g;
+}
+const rotulo = g => g.cfg.identificador + " [" + (g.cfg.tipo === "DEPOSITO" ? "DEPÓSITO" : "LOJA") + "]";
+/* Pergunta (só se houver mais de uma lista com itens) se é para gerar a lista atual ou todas. Devolve a lista de grupos, ou null se cancelou. */
+function escolherListas(oque){
+  const todos = gruposComItens();
+  if (todos.length <= 1) return todos;
+  const atual = todos.find(g => g.atual);
+  const resumo = todos.map(g => "   - " + rotulo(g) + " (" + g.items.length + " itens)").join("\n");
+  if (!atual) {
+    if (!confirm("A lista atual está vazia, mas este aparelho tem " + todos.length + " listas com itens:\n" + resumo + "\n\nGerar o " + oque + " de TODAS elas?")) return null;
+    return todos;
+  }
+  const r = prompt("Gerar o " + oque + " de quê?\n\n1 = Somente a lista atual: " + rotulo(atual) + " (" + atual.items.length + " itens)\n2 = TODAS as listas com itens (" + todos.length + "):\n" + resumo + "\n\nDigite 1 ou 2:", "1");
+  if (r === null) return null;
+  return String(r).trim() === "2" ? todos : [atual];
+}
+function nomeArquivoGrupos(grupos, ext){
+  if (grupos.length <= 1) { const c = grupos[0] && grupos[0].cfg || state.cfg; const salvo = state.cfg; state.cfg = c; const n = nomeArquivo(ext); state.cfg = salvo; return n; }
+  const d = new Date(), dt = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+  return ["PreContagem", state.cfg.loja ? String(state.cfg.loja).replace(/[^A-Za-z0-9_-]/g, "") : "", "TodasAsListas", dt].filter(Boolean).join("_") + "." + ext;
+}
+
 async function gerarPDF(){
-  if (!state.items.length || !exigirCfg()) return;
+  if (!exigirCfg()) return;
+  const grupos = escolherListas("PDF");
+  if (!grupos || !grupos.length) return;
   if (!window.jspdf || !window.OC_PDF) { showToast("Gerador de PDF ainda carregando — tente de novo"); return; }
   try {
-    const doc = OC_PDF.gerarPDF(window.jspdf.jsPDF, { cfg: state.cfg, items: state.items, logo: await carregarLogo() });
-    doc.save(nomeArquivo("pdf"));
+    const doc = OC_PDF.gerarPDF(window.jspdf.jsPDF, { grupos: grupos.map(g => ({ cfg: g.cfg, items: g.items })), logo: await carregarLogo() });
+    doc.save(nomeArquivoGrupos(grupos, "pdf"));
   } catch (e) { console.error(e); showToast("Erro ao gerar PDF: " + e.message); }
 }
 
 function gerarExcel(){
-  if (!state.items.length || !exigirCfg()) return;
+  if (!exigirCfg()) return;
+  const grupos = escolherListas("Excel");
+  if (!grupos || !grupos.length) return;
   if (!window.XLSX) { showToast("Gerador de Excel ainda carregando — tente de novo"); return; }
-  const c = state.cfg;
   const cab = ["LOJA", "LOCAL", "IDENTIFICADOR", "RESPONSÁVEL", "ITEM", "ID", "COD_EAN", "DESCRIÇÃO", "QUANTIDADE", "DATA/HORA", "CADASTRADO NA BASE"];
-  const linhas = state.items.map((it, i) => [
-    c.loja, c.tipo === "DEPOSITO" ? "DEPÓSITO" : "LOJA", c.identificador, c.matricula + " - " + c.nome, i + 1, it.id, String(it.ean), it.desc, it.qtd,
-    new Date(it.ts).toLocaleString("pt-BR"), it.naoCadastrado ? "NÃO" : "SIM"
-  ]);
-  const ws = XLSX.utils.aoa_to_sheet([cab].concat(linhas));
-  // EAN como texto (senão o Excel arredonda de novo)
-  for (let r = 1; r <= linhas.length; r++) { const cell = ws["G" + (r + 1)]; if (cell) { cell.t = "s"; cell.z = "@"; } }
-  ws["!cols"] = [{wch:7},{wch:11},{wch:14},{wch:34},{wch:6},{wch:10},{wch:16},{wch:46},{wch:11},{wch:19},{wch:12}];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Coleta");
-  XLSX.writeFile(wb, nomeArquivo("xlsx"));
+  const usados = {};
+  grupos.forEach(g => {
+    const c = g.cfg;
+    const linhas = g.items.map((it, i) => [
+      c.loja, c.tipo === "DEPOSITO" ? "DEPÓSITO" : "LOJA", c.identificador, state.cfg.matricula + " - " + state.cfg.nome, i + 1, it.id, String(it.ean), it.desc, it.qtd,
+      new Date(it.ts).toLocaleString("pt-BR"), it.naoCadastrado ? "NÃO" : "SIM"
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([cab].concat(linhas));
+    // EAN como texto (senão o Excel arredonda de novo)
+    for (let r = 1; r <= linhas.length; r++) { const cell = ws["G" + (r + 1)]; if (cell) { cell.t = "s"; cell.z = "@"; } }
+    ws["!cols"] = [{wch:7},{wch:11},{wch:14},{wch:34},{wch:6},{wch:10},{wch:16},{wch:46},{wch:11},{wch:19},{wch:12}];
+    let nome = String(c.identificador + (c.tipo === "DEPOSITO" ? " DEP" : " LOJA")).replace(/[\\\/\?\*\[\]:]/g, "").slice(0, 28) || "Coleta";
+    let n = nome, i = 2; while (usados[n.toUpperCase()]) { n = nome.slice(0, 26) + " " + i++; }
+    usados[n.toUpperCase()] = 1;
+    XLSX.utils.book_append_sheet(wb, ws, n);
+  });
+  XLSX.writeFile(wb, nomeArquivoGrupos(grupos, "xlsx"));
 }
 
 /* ---------- Identificação ---------- */

@@ -149,20 +149,26 @@
     doc.line(p(196), p(1143), p(229), p(1143));
   }
 
+  /* dados = { cfg, items, logo }  (uma lista)   ou   { grupos: [{ cfg, items }, ...], logo }  (várias listas no mesmo PDF) */
   function gerarPDF(JsPDF, dados, opc) {
     var por = (opc && opc.porPagina) || POR_PAGINA;
     var doc = new JsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
-    var itens = dados.items;
-    var paginas = Math.max(1, Math.ceil(itens.length / por));
-    for (var pg = 0; pg < paginas; pg++) {
-      if (pg > 0) doc.addPage();
-      desenhaCabecalho(doc, dados);
-      for (var k = 0; k < por; k++) {
-        var i = pg * por + k;
-        if (i >= itens.length) break;
-        desenhaItem(doc, itens[i], i + 1, TOPO + k * PASSO);
+    var grupos = dados.grupos && dados.grupos.length ? dados.grupos : [{ cfg: dados.cfg, items: dados.items }];
+    var primeira = true;
+    for (var g = 0; g < grupos.length; g++) {
+      var itens = grupos[g].items;
+      var paginas = Math.max(1, Math.ceil(itens.length / por));
+      for (var pg = 0; pg < paginas; pg++) {
+        if (!primeira) doc.addPage();
+        primeira = false;
+        desenhaCabecalho(doc, { cfg: grupos[g].cfg, logo: dados.logo });
+        for (var k = 0; k < por; k++) {
+          var i = pg * por + k;
+          if (i >= itens.length) break;
+          desenhaItem(doc, itens[i], i + 1, TOPO + k * PASSO);
+        }
+        desenhaRodape(doc, pg + 1, paginas);
       }
-      desenhaRodape(doc, pg + 1, paginas);
     }
     return doc;
   }
